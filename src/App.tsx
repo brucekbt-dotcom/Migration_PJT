@@ -457,9 +457,8 @@ const ThemeTokens = () => {
         "html.dark{--bg:#060714;--panel:#0b0b1a;--panel2:#0b1220;--text:#f8fafc;--muted:#a1a1aa;--border:#27272a;--accent:#a78bfa;--accent2:#22d3ee;--catNetwork:#4ade80;--catStorage:#7dd3fc;--catServer:#c4b5fd;--catOther:#fde047;--lampOn:#4ade80;--lampOff:#ef4444}",
     },
   };
-  const css = presets[style] || presets.neon;
-  return <style>{css.light + "
-" + css.dark}</style>;
+const css = presets[style] || presets.neon;
+return <style>{`${css.light}\n${css.dark}`}</style>;
 };
 
 // -----------------------------
