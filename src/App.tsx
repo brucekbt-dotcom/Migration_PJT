@@ -518,10 +518,8 @@ function downloadCSV(devices: Device[]) {
   ];
   const esc = (v: any) => {
     const s = String(v ?? "");
-    const needs =
-      s.includes(",") || s.includes('"') || s.includes("
-") || s.includes("
-");
+const needs =
+  s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r");
     return needs ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const rows = devices.map((d) => [
