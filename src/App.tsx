@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { create } from "zustand";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -22,6 +22,7 @@ import {
   Upload,
   Expand,
   Minimize,
+  Shield,
 } from "lucide-react";
 import {
   BarChart,
@@ -39,9 +40,11 @@ import {
 
 type ThemeMode = "dark" | "light";
 type ThemeStyle = "neon" | "graphite" | "aurora" | "circuit";
-type PageKey = "dashboard" | "devices" | "before" | "after";
+type PageKey = "dashboard" | "devices" | "before" | "after" | "admin";
 type DeviceCategory = "Network" | "Storage" | "Server" | "Other";
 type PlacementMode = "before" | "after";
+type Role = "admin" | "vendor";
+
 type MigrationFlags = { racked: boolean; cabled: boolean; powered: boolean; tested: boolean };
 type Rack = { id: string; name: string; units: number };
 
@@ -57,12 +60,15 @@ type Device = {
   ip?: string;
   serial?: string;
   portMap?: string;
+
   beforeRackId?: string;
   beforeStartU?: number;
   beforeEndU?: number;
+
   afterRackId?: string;
   afterStartU?: number;
   afterEndU?: number;
+
   migration: MigrationFlags;
 };
 
@@ -79,9 +85,12 @@ type DeviceDraft = {
   portMap?: string;
 };
 
-type UiState = { sideCollapsed: boolean; afterPanelCollapsed: boolean };
-
-type HoverInfo = { x: number; y: number; device: Device; mode: PlacementMode };
+type UiState = {
+  sideCollapsed: boolean;
+  // 未放置設備面板收合（兩頁共用）
+  unplacedCollapsedBefore: boolean;
+  unplacedCollapsedAfter: boolean;
+};
 
 type LoginResult = { ok: boolean; message?: string };
 
@@ -90,9 +99,18 @@ type LoginResult = { ok: boolean; message?: string };
 ----------------------------- */
 
 const AUTH_USERS = [
-  { user: "admin", pass: "migration123" },
-  { user: "SETVendor", pass: "migration666" },
+  { user: "admin", pass: "migration123", role: "admin" as Role },
+  { user: "SETVendor", pass: "migration666", role: "vendor" as Role },
 ] as const;
+
+const roleOf = (u: string | null): Role => {
+  if (u === "admin") return "admin";
+  return "vendor";
+};
+
+const canManageAssets = (role: Role) => role === "admin"; // 新增/刪除/匯入/編輯
+const canExportCSV = (_role: Role) => true; // admin & vendor 都可
+const canToggleFlags = (_role: Role) => true; // admin & vendor 都可
 
 /* -----------------------------
   LocalStorage Keys
@@ -108,37 +126,21 @@ const LS = {
 } as const;
 
 /* -----------------------------
-  Rack Layouts (依你最新定義)
+  Rack Layouts（依你最新定義）
 ----------------------------- */
 
 const BEFORE_RACKS: Rack[] = [
-  // 第一排：B10..B6（5）
   ...["B10", "B9", "B8", "B7", "B6"].map((n) => ({ id: `BEF_${n}`, name: n, units: 42 })),
-  // 第二排：A5..A1（5）
   ...["A5", "A4", "A3", "A2", "A1"].map((n) => ({ id: `BEF_${n}`, name: n, units: 42 })),
-  // 第三排：2F-A..4F-B（6）
   ...["2F-A", "2F-B", "3F-A", "3F-B", "4F-A", "4F-B"].map((n) => ({ id: `BEF_${n}`, name: n, units: 42 })),
-  // 第四排：9F, SmartHouseA, SmartHouseB（3）
   ...["9F", "SmartHouseA", "SmartHouseB"].map((n) => ({ id: `BEF_${n}`, name: n, units: 42 })),
 ];
 
 const AFTER_RACKS: Rack[] = [
-  // 第一排：A1..A6（6）
   ...["A1", "A2", "A3", "A4", "A5", "A6"].map((n) => ({ id: `AFT_${n}`, name: n, units: 42 })),
-  // 第二排：B1..B6（6）
   ...["B1", "B2", "B3", "B4", "B5", "B6"].map((n) => ({ id: `AFT_${n}`, name: n, units: 42 })),
-  // 第三排：HUB 15L..17R（6）
-  ...["HUB 15L", "HUB 15R", "HUB 16L", "HUB 16R", "HUB 17L", "HUB 17R"].map((n) => ({
-    id: `AFT_${n}`,
-    name: n,
-    units: 42,
-  })),
-  // 第四排：HUB 20F, SmartHouse 20F, 不搬存放區A/B/C（5）
-  ...["HUB 20F", "SmartHouse 20F", "不搬存放區A", "不搬存放區B", "不搬存放區C"].map((n) => ({
-    id: `AFT_${n}`,
-    name: n,
-    units: 42,
-  })),
+  ...["HUB 15L", "HUB 15R", "HUB 16L", "HUB 16R", "HUB 17L", "HUB 17R"].map((n) => ({ id: `AFT_${n}`, name: n, units: 42 })),
+  ...["HUB 20F", "SmartHouse 20F", "不搬存放區A", "不搬存放區B", "不搬存放區C"].map((n) => ({ id: `AFT_${n}`, name: n, units: 42 })),
 ];
 
 const mockDevices: Device[] = [
@@ -197,8 +199,11 @@ const mockDevices: Device[] = [
 ----------------------------- */
 
 const clampU = (u: number) => Math.max(1, Math.min(42, u));
-const rangesOverlap = (aS: number, aE: number, bS: number, bE: number) => Math.max(aS, bS) <= Math.min(aE, bE);
-const isMigratedComplete = (m: MigrationFlags) => m.racked && m.cabled && m.powered && m.tested;
+const rangesOverlap = (aS: number, aE: number, bS: number, bE: number) =>
+  Math.max(aS, bS) <= Math.min(aE, bE);
+
+const isMigratedComplete = (m: MigrationFlags) =>
+  m.racked && m.cabled && m.powered && m.tested;
 
 const readJson = <T,>(k: string, fallback: T): T => {
   try {
@@ -217,11 +222,42 @@ const writeJson = (k: string, v: any) => {
   }
 };
 
+const isProbablyOldRackId = (v: string) => {
+  // 舊資料可能是 "A1" / "B6" / "HUB 15A" / "SmartHouse 20F" / "9F" 等
+  // 新資料我們要 BEF_/AFT_ 前綴
+  if (!v) return false;
+  return !v.startsWith("BEF_") && !v.startsWith("AFT_");
+};
+
+const toBeforeRackId = (nameOrId: string) => {
+  const s = String(nameOrId || "").trim();
+  if (!s) return undefined;
+  if (s.startsWith("BEF_")) return s;
+  if (s.startsWith("AFT_")) return `BEF_${s.slice(4)}`;
+  return `BEF_${s}`;
+};
+
+const toAfterRackId = (nameOrId: string) => {
+  const s = String(nameOrId || "").trim();
+  if (!s) return undefined;
+  if (s.startsWith("AFT_")) return s;
+  if (s.startsWith("BEF_")) return `AFT_${s.slice(4)}`;
+  return `AFT_${s}`;
+};
+
 const normalizeDevices = (raw: any[]): Device[] => {
   const arr = Array.isArray(raw) ? raw : [];
   return arr.map((d: any) => {
     const sizeU = Math.max(1, Math.min(42, Number(d?.sizeU ?? 1)));
     const mig = d?.migration ?? {};
+
+    let beforeRackId: string | undefined = d?.beforeRackId ?? undefined;
+    let afterRackId: string | undefined = d?.afterRackId ?? undefined;
+
+    // ✅ 修復舊資料：A1/B1 這種沒有前綴的 rackId
+    if (beforeRackId && isProbablyOldRackId(beforeRackId)) beforeRackId = toBeforeRackId(beforeRackId);
+    if (afterRackId && isProbablyOldRackId(afterRackId)) afterRackId = toAfterRackId(afterRackId);
+
     return {
       id: String(d?.id ?? crypto.randomUUID()),
       category: (d?.category as DeviceCategory) || "Other",
@@ -234,12 +270,15 @@ const normalizeDevices = (raw: any[]): Device[] => {
       ip: String(d?.ip ?? ""),
       serial: String(d?.serial ?? ""),
       portMap: String(d?.portMap ?? ""),
-      beforeRackId: d?.beforeRackId ?? undefined,
+
+      beforeRackId,
       beforeStartU: d?.beforeStartU ?? undefined,
       beforeEndU: d?.beforeEndU ?? undefined,
-      afterRackId: d?.afterRackId ?? undefined,
+
+      afterRackId,
       afterStartU: d?.afterStartU ?? undefined,
       afterEndU: d?.afterEndU ?? undefined,
+
       migration: {
         racked: Boolean(mig?.racked ?? false),
         cabled: Boolean(mig?.cabled ?? false),
@@ -251,28 +290,24 @@ const normalizeDevices = (raw: any[]): Device[] => {
 };
 
 /* -----------------------------
-  Category Colors（重新設計：避開紅綠，且與燈號有區隔）
+  Category Colors（避開紅綠，跟燈號不打架）
 ----------------------------- */
 
 const catColorVar = (cat: DeviceCategory) => {
   switch (cat) {
-    // 深青綠 / Teal（非純綠，跟燈號綠分開）
     case "Network":
-      return "var(--catNetwork)";
-    // 淺冰藍 / Cyan
+      return "var(--catNetwork)"; // teal
     case "Storage":
-      return "var(--catStorage)";
-    // 深靛藍 / Indigo
+      return "var(--catStorage)"; // cyan
     case "Server":
-      return "var(--catServer)";
-    // 琥珀黃 / Amber
+      return "var(--catServer)"; // indigo
     default:
-      return "var(--catOther)";
+      return "var(--catOther)"; // amber/brown
   }
 };
 
 /* -----------------------------
-  Theme Tokens (Dark/Light + 4 styles)
+  Theme Tokens
 ----------------------------- */
 
 const ThemeTokens = () => {
@@ -283,7 +318,7 @@ const ThemeTokens = () => {
       light:
         ":root{--bg:#f7fafc;--panel:#ffffff;--panel2:#f1f5f9;--text:#0b1220;--muted:#475569;--border:#e2e8f0;--accent:#06b6d4;--accent2:#a855f7;--onColor:#f8fafc;--catNetwork:#0f766e;--catStorage:#0891b2;--catServer:#4338ca;--catOther:#b45309;--lampOn:#22c55e;--lampOff:#ef4444}",
       dark:
-        "html.dark{--bg:#05070d;--panel:#0b1220;--panel2:#1a2235;--text:#e5e7eb;--muted:#94a3b8;--border:#1e293b;--accent:#22d3ee;--accent2:#c084fc;--onColor:#f8fafc;--catNetwork:#14b8a6;--catStorage:#22d3ee;--catServer:#818cf8;--catOther:#f59e0b;--lampOn:#22c55e;--lampOff:#ef4444}",
+        "html.dark{--bg:#05070d;--panel:#0b1220;--panel2:#1a2235;--text:#e5e7eb;--muted:#94a3b8;--border:#1e293b;--accent:#22d3ee;--accent2:#c084fc;--onColor:#f8fafc;--catNetwork:#2dd4bf;--catStorage:#22d3ee;--catServer:#818cf8;--catOther:#f59e0b;--lampOn:#22c55e;--lampOff:#ef4444}",
     },
     graphite: {
       light:
@@ -355,16 +390,6 @@ function downloadCSV(devices: Device[]) {
     "ip",
     "serial",
     "portMap",
-    "beforeRackId",
-    "beforeStartU",
-    "beforeEndU",
-    "afterRackId",
-    "afterStartU",
-    "afterEndU",
-    "racked",
-    "cabled",
-    "powered",
-    "tested",
   ];
 
   const esc = (v: any) => {
@@ -384,16 +409,6 @@ function downloadCSV(devices: Device[]) {
     d.ip ?? "",
     d.serial ?? "",
     d.portMap ?? "",
-    d.beforeRackId ?? "",
-    d.beforeStartU ?? "",
-    d.beforeEndU ?? "",
-    d.afterRackId ?? "",
-    d.afterStartU ?? "",
-    d.afterEndU ?? "",
-    d.migration.racked,
-    d.migration.cabled,
-    d.migration.powered,
-    d.migration.tested,
   ]);
 
   const csv = `${headers.join(",")}\n${rows.map((r) => r.map(esc).join(",")).join("\n")}`;
@@ -421,7 +436,6 @@ function downloadCSVTemplate() {
 }
 
 function parseCSV(text: string) {
-  // 簡易 CSV parser（支援引號與逗號）
   const rows: string[][] = [];
   let cur = "";
   let inQ = false;
@@ -461,9 +475,9 @@ function parseCSV(text: string) {
     }
     cur += ch;
   }
-  // last cell
+
   pushCell();
-  if (row.some((x) => x.length > 0)) pushRow();
+  if (row.some((x) => x.trim().length > 0)) pushRow();
 
   return rows.filter((r) => r.some((c) => c.trim().length > 0));
 }
@@ -485,6 +499,7 @@ interface Store {
   // auth
   isAuthed: boolean;
   userName: string | null;
+  role: Role;
   login: (u: string, p: string) => LoginResult;
   logout: () => void;
 
@@ -503,10 +518,18 @@ interface Store {
 
   clearPlacement: (mode: PlacementMode, id: string) => void;
   place: (mode: PlacementMode, deviceId: string, rackId: string, startU: number) => { ok: boolean; message?: string };
+
   setMigrationFlag: (id: string, patch: Partial<MigrationFlags>) => void;
+
+  // maintenance
+  repairRackIds: () => void;
 }
 
-const DEFAULT_UI: UiState = { sideCollapsed: false, afterPanelCollapsed: false };
+const DEFAULT_UI: UiState = {
+  sideCollapsed: false,
+  unplacedCollapsedBefore: false,
+  unplacedCollapsedAfter: false,
+};
 
 const useStore = create<Store>((set, get) => ({
   beforeRacks: BEFORE_RACKS,
@@ -521,20 +544,21 @@ const useStore = create<Store>((set, get) => ({
 
   isAuthed: localStorage.getItem(LS.auth) === "1",
   userName: localStorage.getItem(LS.user) || null,
+  role: roleOf(localStorage.getItem(LS.user) || null),
 
   login: (u, p) => {
-    const ok = AUTH_USERS.some((a) => a.user === u && a.pass === p);
-    if (!ok) return { ok: false, message: "帳號或密碼錯誤" };
+    const found = AUTH_USERS.find((a) => a.user === u && a.pass === p);
+    if (!found) return { ok: false, message: "帳號或密碼錯誤" };
     localStorage.setItem(LS.auth, "1");
     localStorage.setItem(LS.user, u);
-    set({ isAuthed: true, userName: u });
+    set({ isAuthed: true, userName: u, role: found.role, page: "dashboard", selectedDeviceId: null });
     return { ok: true };
   },
 
   logout: () => {
     localStorage.removeItem(LS.auth);
     localStorage.removeItem(LS.user);
-    set({ isAuthed: false, userName: null, page: "dashboard", selectedDeviceId: null });
+    set({ isAuthed: false, userName: null, role: "vendor", page: "dashboard", selectedDeviceId: null });
   },
 
   setPage: (page) => set({ page }),
@@ -648,10 +672,25 @@ const useStore = create<Store>((set, get) => ({
       writeJson(LS.devices, next);
       return { devices: next };
     }),
+
+  repairRackIds: () =>
+    set((s) => {
+      const repaired = s.devices.map((d) => {
+        let beforeRackId = d.beforeRackId;
+        let afterRackId = d.afterRackId;
+
+        if (beforeRackId && isProbablyOldRackId(beforeRackId)) beforeRackId = toBeforeRackId(beforeRackId);
+        if (afterRackId && isProbablyOldRackId(afterRackId)) afterRackId = toAfterRackId(afterRackId);
+
+        return { ...d, beforeRackId, afterRackId };
+      });
+      writeJson(LS.devices, repaired);
+      return { devices: repaired };
+    }),
 }));
 
 /* -----------------------------
-  Login Page
+  Login Page（提示帳密明顯顯示）
 ----------------------------- */
 
 function LoginPage() {
@@ -665,8 +704,13 @@ function LoginPage() {
       <ThemeTokens />
       <div className="w-full max-w-md bg-[var(--panel)] border border-[var(--border)] rounded-3xl shadow-2xl p-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-black"
-               style={{ background: "linear-gradient(135deg,var(--accent),var(--accent2))", boxShadow: "0 0 18px rgba(34,211,238,0.25)" }}>
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-black"
+            style={{
+              background: "linear-gradient(135deg,var(--accent),var(--accent2))",
+              boxShadow: "0 0 18px rgba(34,211,238,0.25)",
+            }}
+          >
             <Server size={18} />
           </div>
           <div>
@@ -675,14 +719,24 @@ function LoginPage() {
           </div>
         </div>
 
-        <div className="mt-6 space-y-3">
+        {/* ✅ 明顯的帳密提示 */}
+        <div className="mt-5 p-4 rounded-2xl border border-[var(--border)] bg-[var(--panel2)]">
+          <div className="text-sm font-black mb-2">可用帳號 / 密碼</div>
+          <div className="text-sm text-[var(--muted)] leading-6">
+            <div><span className="font-bold text-[var(--text)]">admin</span> / <span className="font-bold text-[var(--text)]">migration123</span>（管理員）</div>
+            <div><span className="font-bold text-[var(--text)]">SETVendor</span> / <span className="font-bold text-[var(--text)]">migration666</span>（只能查看/切換燈號）</div>
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-3">
           <div>
             <label className="text-xs text-[var(--muted)]">帳號</label>
             <input
               className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
               value={u}
               onChange={(e) => setU(e.target.value)}
-              placeholder="admin / SETVendor"
+              placeholder="admin 或 SETVendor"
+              autoComplete="username"
             />
           </div>
           <div>
@@ -692,7 +746,8 @@ function LoginPage() {
               className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
               value={p}
               onChange={(e) => setP(e.target.value)}
-              placeholder="migration123 / migration666"
+              placeholder="請輸入密碼"
+              autoComplete="current-password"
             />
           </div>
 
@@ -700,6 +755,7 @@ function LoginPage() {
 
           <button
             onClick={() => {
+              setErr(null);
               const res = login(u.trim(), p);
               if (!res.ok) setErr(res.message || "登入失敗");
             }}
@@ -707,10 +763,6 @@ function LoginPage() {
           >
             登入
           </button>
-
-          <div className="text-xs text-[var(--muted)] mt-3">
-            可用帳號：<span className="text-[var(--text)]">admin / SETVendor</span>
-          </div>
         </div>
       </div>
     </div>
@@ -718,162 +770,17 @@ function LoginPage() {
 }
 
 /* -----------------------------
-  Device Modal (edit/create)
+  Simple Switch
 ----------------------------- */
 
-function DeviceModal({
-  title,
-  initial,
-  onClose,
-  onSave,
-}: {
-  title: string;
-  initial: DeviceDraft;
-  onClose: () => void;
-  onSave: (d: DeviceDraft) => void;
-}) {
-  const [d, setD] = useState<DeviceDraft>(initial);
-  const portsOptions = [8, 16, 24, 48, 72];
-
-  const input = (k: keyof DeviceDraft) => (e: any) => setD((p) => ({ ...p, [k]: e.target.value } as any));
-
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <motion.div
-        initial={{ scale: 0.96, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-2xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl"
-      >
-        <div className="p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-xl font-black text-[var(--text)]">{title}</div>
-            <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5" aria-label="close">
-              <X />
-            </button>
-          </div>
-
-          <form
-            className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!d.deviceId.trim() || !d.name.trim()) return alert("請填寫設備編號與設備名稱");
-              onSave({
-                ...d,
-                ports: Number(d.ports) || 0,
-                sizeU: Math.max(1, Math.min(42, Number(d.sizeU) || 1)),
-              });
-            }}
-          >
-            <div>
-              <label className="text-xs text-[var(--muted)]">類別</label>
-              <select
-                className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none"
-                value={d.category}
-                onChange={input("category") as any}
-              >
-                {(["Network", "Storage", "Server", "Other"] as DeviceCategory[]).map((x) => (
-                  <option key={x} value={x}>
-                    {x}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">設備編號</label>
-              <input
-                className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                value={d.deviceId}
-                onChange={input("deviceId")}
-                placeholder="EX: SW-01"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">設備名稱</label>
-              <input
-                className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                value={d.name}
-                onChange={input("name")}
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">廠牌</label>
-              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.brand} onChange={input("brand")} />
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">型號</label>
-              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.model} onChange={input("model")} />
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">Port數量</label>
-              <select
-                className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none"
-                value={String(d.ports)}
-                onChange={(e) => setD((p) => ({ ...p, ports: Number(e.target.value) }))}
-              >
-                {portsOptions.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">占用高度(U)</label>
-              <input
-                type="number"
-                min={1}
-                max={42}
-                className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none"
-                value={d.sizeU}
-                onChange={(e) => setD((p) => ({ ...p, sizeU: Number(e.target.value) || 1 }))}
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">設備IP</label>
-              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.ip ?? ""} onChange={input("ip")} placeholder="10.0.0.10" />
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">序號</label>
-              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.serial ?? ""} onChange={input("serial")} />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="text-xs text-[var(--muted)]">Port對接備註</label>
-              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.portMap ?? ""} onChange={input("portMap")} placeholder="EX: Gi1/0/1 -> Firewall WAN" />
-            </div>
-
-            <div className="md:col-span-2 flex justify-end gap-3 mt-2">
-              <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5">
-                取消
-              </button>
-              <button type="submit" className="px-4 py-2 rounded-xl bg-[var(--accent)] text-black font-extrabold hover:opacity-90">
-                儲存
-              </button>
-            </div>
-          </form>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-/* -----------------------------
-  Device Detail Modal（搬遷後可切換狀態：即時更新）
------------------------------ */
-
-function Switch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+function Switch({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
     <button
+      disabled={disabled}
       onClick={() => onChange(!on)}
-      className={`w-11 h-6 rounded-full border transition-all ${on ? "bg-[var(--lampOn)]/20 border-[var(--lampOn)]" : "bg-black/20 border-[var(--border)]"}`}
+      className={`w-11 h-6 rounded-full border transition-all ${
+        disabled ? "opacity-50 cursor-not-allowed" : ""
+      } ${on ? "bg-[var(--lampOn)]/20 border-[var(--lampOn)]" : "bg-black/20 border-[var(--border)]"}`}
       style={{ boxShadow: on ? "0 0 16px rgba(34,197,94,0.25)" : "none" }}
     >
       <span
@@ -884,25 +791,44 @@ function Switch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   );
 }
 
+/* -----------------------------
+  Device Detail Modal（搬遷後可切換狀態：即時更新）
+----------------------------- */
+
 function DeviceDetailModal({ id, mode, onClose }: { id: string; mode: PlacementMode; onClose: () => void }) {
   const d = useStore((s) => s.devices.find((x) => x.id === id));
   const setFlag = useStore((s) => s.setMigrationFlag);
   const clearPlacement = useStore((s) => s.clearPlacement);
+  const role = useStore((s) => s.role);
 
   if (!d) return null;
 
-  const beforePos = d.beforeRackId ? `${d.beforeRackId.replace(/^BEF_/, "")} ${d.beforeStartU}-${d.beforeEndU}U` : "-";
-  const afterPos = d.afterRackId ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U` : "-";
+  const beforePos =
+    d.beforeRackId && d.beforeStartU != null && d.beforeEndU != null
+      ? `${d.beforeRackId.replace(/^BEF_/, "")} ${d.beforeStartU}-${d.beforeEndU}U`
+      : "-";
+  const afterPos =
+    d.afterRackId && d.afterStartU != null && d.afterEndU != null
+      ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U`
+      : "-";
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-      <motion.div initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl">
+      <motion.div
+        initial={{ scale: 0.96, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="w-full max-w-xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl"
+      >
         <div className="p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-xs text-[var(--muted)]">設備詳細</div>
-              <div className="text-lg font-black">{d.deviceId} · {d.name}</div>
-              <div className="text-sm text-[var(--muted)]">{d.brand} / {d.model} · {d.ports} ports · {d.sizeU}U</div>
+              <div className="text-lg font-black">
+                {d.deviceId} · {d.name}
+              </div>
+              <div className="text-sm text-[var(--muted)]">
+                {d.brand} / {d.model} · {d.ports} ports · {d.sizeU}U
+              </div>
             </div>
             <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5">
               <X />
@@ -921,7 +847,9 @@ function DeviceDetailModal({ id, mode, onClose }: { id: string; mode: PlacementM
 
             <div className="p-3 rounded-2xl border border-[var(--border)] bg-[var(--panel2)] md:col-span-2">
               <div className="text-xs text-[var(--muted)]">IP / 序號</div>
-              <div className="mt-1 font-bold">{d.ip || "-"} / {d.serial || "-"}</div>
+              <div className="mt-1 font-bold">
+                {d.ip || "-"} / {d.serial || "-"}
+              </div>
               <div className="text-xs text-[var(--muted)] mt-2">Port對接備註</div>
               <div className="mt-1">{d.portMap || "-"}</div>
             </div>
@@ -937,19 +865,35 @@ function DeviceDetailModal({ id, mode, onClose }: { id: string; mode: PlacementM
               <div className="mt-4 grid grid-cols-1 gap-3">
                 <div className="flex items-center justify-between">
                   <div className="text-sm">已上架</div>
-                  <Switch on={d.migration.racked} onChange={(v) => setFlag(d.id, { racked: v })} />
+                  <Switch
+                    on={d.migration.racked}
+                    onChange={(v) => canToggleFlags(role) && setFlag(d.id, { racked: v })}
+                    disabled={!canToggleFlags(role)}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-sm">已接線</div>
-                  <Switch on={d.migration.cabled} onChange={(v) => setFlag(d.id, { cabled: v })} />
+                  <Switch
+                    on={d.migration.cabled}
+                    onChange={(v) => canToggleFlags(role) && setFlag(d.id, { cabled: v })}
+                    disabled={!canToggleFlags(role)}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-sm">已開機</div>
-                  <Switch on={d.migration.powered} onChange={(v) => setFlag(d.id, { powered: v })} />
+                  <Switch
+                    on={d.migration.powered}
+                    onChange={(v) => canToggleFlags(role) && setFlag(d.id, { powered: v })}
+                    disabled={!canToggleFlags(role)}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-sm">已測試</div>
-                  <Switch on={d.migration.tested} onChange={(v) => setFlag(d.id, { tested: v })} />
+                  <Switch
+                    on={d.migration.tested}
+                    onChange={(v) => canToggleFlags(role) && setFlag(d.id, { tested: v })}
+                    disabled={!canToggleFlags(role)}
+                  />
                 </div>
               </div>
             ) : (
@@ -978,13 +922,13 @@ function DeviceDetailModal({ id, mode, onClose }: { id: string; mode: PlacementM
 }
 
 /* -----------------------------
-  Dashboard（已上架/待處理顏色）
+  Dashboard
 ----------------------------- */
 
 const Dashboard = () => {
   const devices = useStore((s) => s.devices);
 
-  const racked = devices.filter((d) => d.migration.racked).length; // ✅ 已上架
+  const racked = devices.filter((d) => d.migration.racked).length; // 已上架
   const completed = devices.filter((d) => isMigratedComplete(d.migration)).length;
   const pending = Math.max(0, devices.length - completed);
 
@@ -1056,7 +1000,7 @@ const Dashboard = () => {
         <div className="bg-[var(--panel)] border border-[var(--border)] p-6 rounded-2xl">
           <h3 className="text-lg font-black mb-4">操作提示</h3>
           <ul className="text-sm text-[var(--muted)] space-y-2">
-            <li>1) 到「設備管理」新增/編輯設備（含 Ports、IP、序號、占用 U）。</li>
+            <li>1) 到「設備管理」管理設備。</li>
             <li>2) 在「搬遷前/後」把設備拖到機櫃；已放置設備也可拖曳調整位置（含 U 重疊檢查）。</li>
             <li>3) 點機櫃內設備可看詳細；在「搬遷後」可即時切換 4 個狀態燈。</li>
           </ul>
@@ -1067,7 +1011,7 @@ const Dashboard = () => {
 };
 
 /* -----------------------------
-  Devices Page（含 CSV 匯入）
+  CSV Import Modal（Admin only）
 ----------------------------- */
 
 function CSVImportModal({ onClose }: { onClose: () => void }) {
@@ -1083,9 +1027,7 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
     const idx = (k: string) => header.findIndex((h) => h === k);
 
     const required = ["category", "deviceId", "name", "brand", "model", "ports", "sizeU"];
-    for (const k of required) {
-      if (idx(k) === -1) return alert(`CSV 缺少欄位：${k}`);
-    }
+    for (const k of required) if (idx(k) === -1) return alert(`CSV 缺少欄位：${k}`);
 
     const drafts: DeviceDraft[] = rows.slice(1).map((r) => {
       const get = (k: string) => (idx(k) >= 0 ? String(r[idx(k)] ?? "").trim() : "");
@@ -1112,7 +1054,11 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-      <motion.div initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl">
+      <motion.div
+        initial={{ scale: 0.96, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="w-full max-w-xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl"
+      >
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div className="text-xl font-black">CSV 匯入設備</div>
@@ -1122,11 +1068,14 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="mt-3 text-sm text-[var(--muted)]">
-            你可以拖曳 CSV 檔案到下方區域，或點擊選取檔案。也可先下載範本。
+            拖曳 CSV 到下方區域，或點擊選取檔案。也可先下載範本。
           </div>
 
           <div className="mt-4 flex gap-2">
-            <button onClick={downloadCSVTemplate} className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2">
+            <button
+              onClick={downloadCSVTemplate}
+              className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2"
+            >
               <Download size={16} /> 下載範本
             </button>
           </div>
@@ -1155,7 +1104,10 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
               }}
             />
             <div className="flex flex-col items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "linear-gradient(135deg,var(--accent),var(--accent2))" }}>
+              <div
+                className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                style={{ background: "linear-gradient(135deg,var(--accent),var(--accent2))" }}
+              >
                 <Upload className="text-black" />
               </div>
               <div className="font-black">拖曳 CSV 到這裡上傳</div>
@@ -1168,6 +1120,119 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+/* -----------------------------
+  Device Modal（Admin only）
+----------------------------- */
+
+function DeviceModal({
+  title,
+  initial,
+  onClose,
+  onSave,
+}: {
+  title: string;
+  initial: DeviceDraft;
+  onClose: () => void;
+  onSave: (d: DeviceDraft) => void;
+}) {
+  const [d, setD] = useState<DeviceDraft>(initial);
+  const portsOptions = [8, 16, 24, 48, 72];
+  const input = (k: keyof DeviceDraft) => (e: any) => setD((p) => ({ ...p, [k]: e.target.value } as any));
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-2xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl">
+        <div className="p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xl font-black text-[var(--text)]">{title}</div>
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5" aria-label="close">
+              <X />
+            </button>
+          </div>
+
+          <form
+            className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!d.deviceId.trim() || !d.name.trim()) return alert("請填寫設備編號與設備名稱");
+              onSave({
+                ...d,
+                ports: Number(d.ports) || 0,
+                sizeU: Math.max(1, Math.min(42, Number(d.sizeU) || 1)),
+              });
+            }}
+          >
+            <div>
+              <label className="text-xs text-[var(--muted)]">類別</label>
+              <select className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.category} onChange={input("category") as any}>
+                {(["Network", "Storage", "Server", "Other"] as DeviceCategory[]).map((x) => (
+                  <option key={x} value={x}>{x}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">設備編號</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" value={d.deviceId} onChange={input("deviceId")} placeholder="EX: SW-01" />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">設備名稱</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" value={d.name} onChange={input("name")} />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">廠牌</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.brand} onChange={input("brand")} />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">型號</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.model} onChange={input("model")} />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">Port數量</label>
+              <select className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={String(d.ports)} onChange={(e) => setD((p) => ({ ...p, ports: Number(e.target.value) }))}>
+                {portsOptions.map((p) => (<option key={p} value={p}>{p}</option>))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">占用高度(U)</label>
+              <input type="number" min={1} max={42} className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.sizeU} onChange={(e) => setD((p) => ({ ...p, sizeU: Number(e.target.value) || 1 }))} />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">設備IP</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.ip ?? ""} onChange={input("ip")} placeholder="10.0.0.10" />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">序號</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.serial ?? ""} onChange={input("serial")} />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-xs text-[var(--muted)]">Port對接備註</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.portMap ?? ""} onChange={input("portMap")} placeholder="EX: Gi1/0/1 -> Firewall WAN" />
+            </div>
+
+            <div className="md:col-span-2 flex justify-end gap-3 mt-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5">取消</button>
+              <button type="submit" className="px-4 py-2 rounded-xl bg-[var(--accent)] text-black font-extrabold hover:opacity-90">儲存</button>
+            </div>
+          </form>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+/* -----------------------------
+  Devices Page（權限控制）
+----------------------------- */
+
 const DevicesPage = () => {
   const devices = useStore((s) => s.devices);
   const addDevice = useStore((s) => s.addDevice);
@@ -1175,28 +1240,40 @@ const DevicesPage = () => {
   const deleteDevice = useStore((s) => s.deleteDevice);
   const clearPlacement = useStore((s) => s.clearPlacement);
   const setSelectedDeviceId = useStore((s) => s.setSelectedDeviceId);
+  const role = useStore((s) => s.role);
 
   const [isAdding, setIsAdding] = useState(false);
   const [editing, setEditing] = useState<Device | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+
+  const allowManage = canManageAssets(role);
 
   return (
     <div className="p-6">
       <div className="flex flex-wrap gap-3 justify-between items-end mb-6">
         <div>
           <h2 className="text-2xl font-black text-[var(--accent)]">設備資產清單</h2>
-          <p className="text-[var(--muted)] text-sm">新增/編輯/刪除設備；刪除會同步移除搬遷前與搬遷後機櫃配置。</p>
+          <p className="text-[var(--muted)] text-sm">
+            {allowManage ? "新增/編輯/刪除設備；刪除會同步移除搬遷前與搬遷後機櫃配置。" : "你目前為 SETVendor 權限：可查看、可匯出 CSV、可切換搬遷後燈號。"}
+          </p>
         </div>
+
         <div className="flex gap-2">
-          <button onClick={() => setImportOpen(true)} className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2">
-            <Upload size={16} /> CSV 匯入
-          </button>
-          <button onClick={() => downloadCSV(devices)} className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2">
+          {allowManage && (
+            <button onClick={() => setImportOpen(true)} className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2">
+              <Upload size={16} /> CSV 匯入
+            </button>
+          )}
+
+          <button onClick={() => canExportCSV(role) && downloadCSV(devices)} className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2">
             <Download size={16} /> CSV 匯出
           </button>
-          <button onClick={() => setIsAdding(true)} className="bg-[var(--accent)] text-black px-4 py-2 rounded-xl font-extrabold flex items-center gap-2 hover:opacity-90">
-            <Plus size={18} /> 新增設備
-          </button>
+
+          {allowManage && (
+            <button onClick={() => setIsAdding(true)} className="bg-[var(--accent)] text-black px-4 py-2 rounded-xl font-extrabold flex items-center gap-2 hover:opacity-90">
+              <Plus size={18} /> 新增設備
+            </button>
+          )}
         </div>
       </div>
 
@@ -1214,67 +1291,81 @@ const DevicesPage = () => {
               <th className="px-6 py-4 font-semibold text-right">操作</th>
             </tr>
           </thead>
+
           <tbody className="divide-y divide-[var(--border)]">
             {devices.map((d) => {
-              const before = d.beforeRackId && d.beforeStartU != null ? `${d.beforeRackId.replace(/^BEF_/, "")} ${d.beforeStartU}-${d.beforeEndU}U` : "-";
-              const after = d.afterRackId && d.afterStartU != null ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U` : "-";
+              const before =
+                d.beforeRackId && d.beforeStartU != null
+                  ? `${d.beforeRackId.replace(/^BEF_/, "")} ${d.beforeStartU}-${d.beforeEndU}U`
+                  : "-";
+              const after =
+                d.afterRackId && d.afterStartU != null
+                  ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U`
+                  : "-";
+
               return (
                 <tr key={d.id} className="hover:bg-white/[0.02] transition-colors group">
                   <td className="px-6 py-4">
                     <span
                       className="text-[10px] font-extrabold px-2 py-1 rounded-md border"
-                      style={{
-                        color: "var(--onColor)",
-                        borderColor: "rgba(255,255,255,0.35)",
-                        backgroundColor: catColorVar(d.category),
-                      }}
+                      style={{ color: "var(--onColor)", borderColor: "rgba(255,255,255,0.35)", backgroundColor: catColorVar(d.category) }}
                     >
                       {d.category}
                     </span>
                   </td>
+
                   <td className="px-6 py-4">
                     <div className="font-black text-sm">{d.deviceId}</div>
                     <button onClick={() => setSelectedDeviceId(d.id)} className="text-xs text-[var(--muted)] hover:text-[var(--accent)]">
                       {d.name}
                     </button>
                   </td>
+
                   <td className="px-6 py-4 text-xs">
                     <div className="text-[var(--text)]">{d.brand}</div>
                     <div className="text-[var(--muted)]">{d.model}</div>
                   </td>
+
                   <td className="px-6 py-4 text-xs text-[var(--muted)]">
                     {d.ports} / {d.sizeU}U
                   </td>
+
                   <td className="px-6 py-4 text-xs text-[var(--muted)]">{before}</td>
                   <td className="px-6 py-4 text-xs text-[var(--muted)]">{after}</td>
+
                   <td className="px-6 py-4">
                     <LampsRow m={d.migration} />
                   </td>
+
                   <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => setEditing(d)} className="p-2 hover:bg-white/10 rounded-lg text-[var(--accent)]" title="編輯">
-                        <Edit3 size={16} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          clearPlacement("before", d.id);
-                          clearPlacement("after", d.id);
-                        }}
-                        className="px-3 py-2 rounded-lg border border-[var(--border)] text-xs hover:bg-white/5"
-                        title="清除位置"
-                      >
-                        清除
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm(`確定刪除 ${d.deviceId} - ${d.name}？`)) deleteDevice(d.id);
-                        }}
-                        className="p-2 hover:bg-white/10 rounded-lg text-red-400"
-                        title="刪除"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+                    {canManageAssets(role) ? (
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => setEditing(d)} className="p-2 hover:bg-white/10 rounded-lg text-[var(--accent)]" title="編輯">
+                          <Edit3 size={16} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            clearPlacement("before", d.id);
+                            clearPlacement("after", d.id);
+                          }}
+                          className="px-3 py-2 rounded-lg border border-[var(--border)] text-xs hover:bg-white/5"
+                          title="清除位置"
+                        >
+                          清除
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`確定刪除 ${d.deviceId} - ${d.name}？`)) deleteDevice(d.id);
+                          }}
+                          className="p-2 hover:bg-white/10 rounded-lg text-red-400"
+                          title="刪除"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-[var(--muted)]">只讀</div>
+                    )}
                   </td>
                 </tr>
               );
@@ -1283,7 +1374,7 @@ const DevicesPage = () => {
             {devices.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-6 py-10 text-center text-[var(--muted)]">
-                  目前沒有設備，請先新增。
+                  目前沒有設備
                 </td>
               </tr>
             )}
@@ -1296,18 +1387,7 @@ const DevicesPage = () => {
       {isAdding && (
         <DeviceModal
           title="新增設備"
-          initial={{
-            category: "Other",
-            deviceId: "",
-            name: "",
-            brand: "",
-            model: "",
-            ports: 8,
-            sizeU: 1,
-            ip: "",
-            serial: "",
-            portMap: "",
-          }}
+          initial={{ category: "Other", deviceId: "", name: "", brand: "", model: "", ports: 8, sizeU: 1, ip: "", serial: "", portMap: "" }}
           onClose={() => setIsAdding(false)}
           onSave={(d) => {
             addDevice(d);
@@ -1343,7 +1423,7 @@ const DevicesPage = () => {
 };
 
 /* -----------------------------
-  Rack Planner
+  Rack Legend
 ----------------------------- */
 
 const RackLegend = () => (
@@ -1357,19 +1437,54 @@ const RackLegend = () => (
   </div>
 );
 
+const isNoMoveRack = (name: string) => name.startsWith("不搬存放區");
+
+/* -----------------------------
+  Rack Planner（修正：未放置清單可見 + 拖拉可用 + 變0自動收合）
+----------------------------- */
+
 const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
   const racks = useStore((s) => (mode === "before" ? s.beforeRacks : s.afterRacks));
   const devices = useStore((s) => s.devices);
   const place = useStore((s) => s.place);
   const clearPlacement = useStore((s) => s.clearPlacement);
   const setSelectedDeviceId = useStore((s) => s.setSelectedDeviceId);
-  const selectedDeviceId = useStore((s) => s.selectedDeviceId);
   const ui = useStore((s) => s.ui);
   const setUi = useStore((s) => s.setUi);
+  const repairRackIds = useStore((s) => s.repairRackIds);
 
-  const [hover, setHover] = useState<HoverInfo | null>(null);
+  // ✅ 每次進來先修一次舊資料（很輕量）
+  useEffect(() => {
+    repairRackIds();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
 
-  // 依 rack 數量分成「每排最多 6 個」的 rows
+  const rackIdSet = useMemo(() => new Set(racks.map((r) => r.id)), [racks]);
+
+  const isPlaced = (d: Device) => {
+    const rid = mode === "before" ? d.beforeRackId : d.afterRackId;
+    const s = mode === "before" ? d.beforeStartU : d.afterStartU;
+    const e = mode === "before" ? d.beforeEndU : d.afterEndU;
+    // ✅ 必須：rackId 存在於目前頁的 racks 且位置完整
+    return !!rid && rackIdSet.has(rid) && s != null && e != null;
+  };
+
+  const unplaced = useMemo(() => devices.filter((d) => !isPlaced(d)), [devices, rackIdSet, mode]);
+
+  // ✅ 變成 0 => 自動收合
+  useEffect(() => {
+    if (unplaced.length === 0) {
+      if (mode === "before" && !ui.unplacedCollapsedBefore) setUi({ unplacedCollapsedBefore: true });
+      if (mode === "after" && !ui.unplacedCollapsedAfter) setUi({ unplacedCollapsedAfter: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unplaced.length, mode]);
+
+  const collapsed = mode === "before" ? ui.unplacedCollapsedBefore : ui.unplacedCollapsedAfter;
+  const setCollapsed = (v: boolean) =>
+    setUi(mode === "before" ? { unplacedCollapsedBefore: v } : { unplacedCollapsedAfter: v });
+
+  // rows: 每排最多6
   const rows = useMemo(() => {
     const out: Rack[][] = [];
     let cur: Rack[] = [];
@@ -1384,11 +1499,12 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
     return out;
   }, [racks]);
 
-  const U_H = 22;
-
   const listForRack = (rackId: string) =>
     devices
-      .filter((d) => (mode === "before" ? d.beforeRackId === rackId : d.afterRackId === rackId))
+      .filter((d) => {
+        const rid = mode === "before" ? d.beforeRackId : d.afterRackId;
+        return rid === rackId;
+      })
       .filter((d) => {
         const s = mode === "before" ? d.beforeStartU : d.afterStartU;
         const e = mode === "before" ? d.beforeEndU : d.afterEndU;
@@ -1400,18 +1516,7 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
         return as - bs;
       });
 
-  const unplaced = useMemo(() => {
-    return devices.filter((d) => (mode === "before" ? !d.beforeRackId : !d.afterRackId));
-  }, [devices, mode]);
-
-  // 全部已放置 => 自動收合（只針對搬遷佈局頁）
-  useEffect(() => {
-    if (unplaced.length === 0 && !ui.afterPanelCollapsed) setUi({ afterPanelCollapsed: true });
-    if (unplaced.length > 0 && ui.afterPanelCollapsed) {
-      // 不自動展開，避免干擾；需要的話你說我再改成自動展開
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unplaced.length]);
+  const U_H = 22;
 
   const getBlockStyle = (d: Device) => {
     const sU = (mode === "before" ? d.beforeStartU : d.afterStartU) ?? 1;
@@ -1420,7 +1525,7 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
     const end = clampU(Math.max(sU, eU));
     const height = (end - start + 1) * U_H;
     const bottom = (start - 1) * U_H;
-    return { bottom, height, start, end };
+    return { bottom, height };
   };
 
   const onDrop = (e: React.DragEvent, rackId: string, u: number) => {
@@ -1431,50 +1536,49 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
     if (!res.ok) alert(res.message);
   };
 
-  const isNoMoveRack = (name: string) => name.startsWith("不搬存放區");
-
   return (
     <div className="p-6">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
-          <h2 className="text-2xl font-black text-[var(--accent)]">{mode === "before" ? "搬遷前" : "搬遷後"} 機櫃佈局</h2>
-          <p className="text-[var(--muted)] text-sm">拖拉設備到機櫃；已放置設備也可再拖拉調整位置（含 U 重疊檢查）</p>
+          <h2 className="text-2xl font-black text-[var(--accent)]">
+            {mode === "before" ? "搬遷前" : "搬遷後"} 機櫃佈局
+          </h2>
+          <p className="text-[var(--muted)] text-sm">
+            拖拉設備到機櫃；已放置設備也可再拖拉調整位置（含 U 重疊檢查）
+          </p>
         </div>
+
         <div className="flex items-center gap-3">
           <RackLegend />
           <button
-            onClick={() => setUi({ afterPanelCollapsed: !ui.afterPanelCollapsed })}
+            onClick={() => setCollapsed(!collapsed)}
             className="px-3 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2 text-sm"
             title="收合/展開未放置清單"
           >
-            {ui.afterPanelCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
+            {collapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
             未放置({unplaced.length})
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
+        {/* Left racks */}
         <div className="space-y-6">
           {rows.map((row, idx) => (
             <div key={idx} className="grid gap-4" style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}>
               {row.map((rack) => (
                 <div key={rack.id} className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
-                  <div className="bg-black/30 text-center py-2 font-mono text-sm border-b border-[var(--border)]"
-                       style={{ color: mode === "after" && isNoMoveRack(rack.name) ? "var(--lampOff)" : "var(--accent)" }}>
+                  <div
+                    className="bg-black/30 text-center py-2 font-mono text-sm border-b border-[var(--border)]"
+                    style={{ color: mode === "after" && isNoMoveRack(rack.name) ? "var(--lampOff)" : "var(--accent)" }}
+                  >
                     {rack.name}
                   </div>
 
                   <div className="p-3">
                     <div className="flex gap-2">
-                      {/* Left scale 1~42 */}
+                      {/* scale */}
                       <div className="relative">
-                        <div
-                          className="absolute inset-0 blur-xl"
-                          style={{
-                            background: "radial-gradient(circle at top, var(--accent), transparent 60%)",
-                            opacity: 0.15,
-                          }}
-                        />
                         <div className="relative flex flex-col-reverse">
                           {Array.from({ length: 42 }).map((_, i) => {
                             const u = i + 1;
@@ -1487,20 +1591,14 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                         </div>
                       </div>
 
-                      {/* Rack grid */}
+                      {/* rack grid */}
                       <div className="relative flex-1 border border-[var(--border)] bg-black/20" style={{ height: 42 * U_H }}>
                         <div className="absolute inset-0 flex flex-col-reverse">
                           {Array.from({ length: 42 }).map((_, i) => {
                             const u = i + 1;
-                            const thick = u % 5 === 0; // 每 5U 粗線
+                            const thick = u % 5 === 0;
                             return (
-                              <div
-                                key={u}
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => onDrop(e, rack.id, u)}
-                                className="relative"
-                                style={{ height: U_H }}
-                              >
+                              <div key={u} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, rack.id, u)} className="relative" style={{ height: U_H }}>
                                 <div className="absolute inset-x-0 top-0" style={{ height: thick ? 2 : 1, background: thick ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.15)" }} />
                                 <div className="absolute inset-0 hover:bg-white/[0.03]" />
                               </div>
@@ -1508,7 +1606,7 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                           })}
                         </div>
 
-                        {/* device blocks */}
+                        {/* devices */}
                         {listForRack(rack.id).map((d) => {
                           const { bottom, height } = getBlockStyle(d);
                           const catColor = catColorVar(d.category);
@@ -1521,35 +1619,12 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                                 ev.dataTransfer.setData("text/plain", d.id);
                                 ev.dataTransfer.effectAllowed = "move";
                               }}
-                              onMouseEnter={(ev) => {
-                                const rect = (ev.currentTarget as HTMLDivElement).getBoundingClientRect();
-                                setHover({ x: rect.right + 10, y: rect.top, device: d, mode });
-                              }}
-                              onMouseLeave={() => setHover(null)}
                               onClick={() => setSelectedDeviceId(d.id)}
                               className="absolute left-1 right-1 border border-white/70 cursor-pointer select-none"
-                              style={{
-                                bottom,
-                                height,
-                                backgroundColor: catColor,
-                              }}
+                              style={{ bottom, height, backgroundColor: catColor }}
                             >
-                              <div className="h-full w-full px-2 py-1 flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                  <div className="text-[13px] font-black truncate" style={{ color: "var(--onColor)" }}>
-                                    {d.deviceId}
-                                  </div>
-                                  <div className="text-[12px] font-bold truncate" style={{ color: "var(--onColor)", opacity: 0.95 }}>
-                                    {d.name}
-                                  </div>
-                                </div>
-
-                                {/* Right-bottom lamps */}
-                                <div className="absolute right-2 bottom-2">
-                                  <LampsRow m={d.migration} />
-                                </div>
-
-                                {/* Clear button (avoid overlap) */}
+                              <div className="h-full w-full px-2 py-1">
+                                {/* Clear */}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1560,6 +1635,21 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                                 >
                                   <X size={14} className="text-white" />
                                 </button>
+
+                                {/* Text */}
+                                <div className="pr-8">
+                                  <div className="text-[13px] font-black truncate" style={{ color: "var(--onColor)" }}>
+                                    {d.deviceId}
+                                  </div>
+                                  <div className="text-[12px] font-bold truncate" style={{ color: "var(--onColor)", opacity: 0.95 }}>
+                                    {d.name}
+                                  </div>
+                                </div>
+
+                                {/* Lamps right-bottom */}
+                                <div className="absolute right-2 bottom-2">
+                                  <LampsRow m={d.migration} />
+                                </div>
                               </div>
                             </div>
                           );
@@ -1574,66 +1664,117 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
         </div>
 
         {/* Right panel: unplaced list */}
-        <div className={`bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden ${ui.afterPanelCollapsed ? "hidden xl:block" : ""}`}>
-          <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
-            <div>
-              <div className="text-sm font-black">未放置設備</div>
-              <div className="text-xs text-[var(--muted)]">拖曳到左側機櫃</div>
-            </div>
-            <button onClick={() => setUi({ afterPanelCollapsed: true })} className="p-2 rounded-xl hover:bg-white/5" title="收合">
-              <PanelRightClose />
-            </button>
-          </div>
-
-          <div className="p-4 space-y-3 max-h-[calc(100vh-220px)] overflow-auto">
-            {unplaced.length === 0 ? (
-              <div className="text-sm text-[var(--muted)]">✅ 全部設備都已放置</div>
-            ) : (
-              unplaced.map((d) => (
-                <div
-                  key={d.id}
-                  draggable
-                  onDragStart={(ev) => {
-                    ev.dataTransfer.setData("text/plain", d.id);
-                    ev.dataTransfer.effectAllowed = "move";
-                  }}
-                  onClick={() => setSelectedDeviceId(d.id)}
-                  className="p-3 rounded-2xl border border-[var(--border)] hover:bg-white/[0.03] cursor-grab active:cursor-grabbing"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-black text-[var(--text)] truncate">{d.deviceId}</div>
-                      <div className="text-xs text-[var(--muted)] truncate">{d.name}</div>
-                      <div className="text-xs text-[var(--muted)] mt-1 truncate">{d.brand} · {d.model} · {d.sizeU}U</div>
-                    </div>
-                    <span className="text-[10px] font-extrabold px-2 py-1 rounded-md border"
-                          style={{ color: "var(--onColor)", borderColor: "rgba(255,255,255,0.35)", backgroundColor: catColorVar(d.category) }}>
-                      {d.category}
-                    </span>
-                  </div>
+        <div className="relative">
+          {collapsed ? (
+            <div className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-black">未放置設備</div>
+                  <div className="text-xs text-[var(--muted)]">目前：{unplaced.length} 台</div>
                 </div>
-              ))
-            )}
-          </div>
+                <button onClick={() => setCollapsed(false)} className="px-3 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2 text-sm">
+                  <PanelRightOpen size={16} /> 展開
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
+              <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-black">未放置設備</div>
+                  <div className="text-xs text-[var(--muted)]">拖曳到左側機櫃（{unplaced.length} 台）</div>
+                </div>
+                <button onClick={() => setCollapsed(true)} className="p-2 rounded-xl hover:bg-white/5" title="收合">
+                  <PanelRightClose />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-3 max-h-[calc(100vh-220px)] overflow-auto">
+                {unplaced.length === 0 ? (
+                  <div className="text-sm text-[var(--muted)]">✅ 全部設備都已放置（已自動收合）</div>
+                ) : (
+                  unplaced.map((d) => (
+                    <div
+                      key={d.id}
+                      draggable
+                      onDragStart={(ev) => {
+                        ev.dataTransfer.setData("text/plain", d.id);
+                        ev.dataTransfer.effectAllowed = "move";
+                      }}
+                      onClick={() => setSelectedDeviceId(d.id)}
+                      className="p-3 rounded-2xl border border-[var(--border)] hover:bg-white/[0.03] cursor-grab active:cursor-grabbing"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-black text-[var(--text)] truncate">{d.deviceId}</div>
+                          <div className="text-xs text-[var(--muted)] truncate">{d.name}</div>
+                          <div className="text-xs text-[var(--muted)] mt-1 truncate">{d.brand} · {d.model} · {d.sizeU}U</div>
+                        </div>
+                        <span className="text-[10px] font-extrabold px-2 py-1 rounded-md border" style={{ color: "var(--onColor)", borderColor: "rgba(255,255,255,0.35)", backgroundColor: catColorVar(d.category) }}>
+                          {d.category}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+    </div>
+  );
+};
 
-      {/* Hover tooltip */}
-      {hover && (
-        <div
-          className="fixed z-[80] pointer-events-none"
-          style={{ left: hover.x, top: hover.y }}
-        >
-          <div className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-3 shadow-2xl w-[280px]">
-            <div className="text-xs text-[var(--muted)] mb-1">設備資訊</div>
-            <div className="font-black">{hover.device.deviceId} · {hover.device.name}</div>
-            <div className="text-xs text-[var(--muted)] mt-1">
-              {hover.device.brand} / {hover.device.model} · {hover.device.ports} ports · {hover.device.sizeU}U
-            </div>
-            <div className="text-xs text-[var(--muted)] mt-2">IP: {hover.device.ip || "-"}</div>
-          </div>
+/* -----------------------------
+  Admin Page（簡易管理後台）
+----------------------------- */
+
+const AdminPage = () => {
+  const user = useStore((s) => s.userName);
+  const role = useStore((s) => s.role);
+  const repairRackIds = useStore((s) => s.repairRackIds);
+
+  if (role !== "admin") {
+    return (
+      <div className="p-6">
+        <div className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-6">
+          <div className="text-lg font-black text-[var(--accent)]">權限不足</div>
+          <div className="text-sm text-[var(--muted)] mt-2">此頁僅提供 Admin 使用。</div>
         </div>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-6">
+        <div className="flex items-center gap-2">
+          <Shield className="text-[var(--accent)]" />
+          <div className="text-lg font-black">Admin 管理後台</div>
+        </div>
+        <div className="text-sm text-[var(--muted)] mt-2">登入者：<span className="text-[var(--text)] font-bold">{user}</span></div>
+
+        <div className="mt-4 p-4 rounded-2xl border border-[var(--border)] bg-[var(--panel2)]">
+          <div className="font-black mb-2">帳號與權限</div>
+          <ul className="text-sm text-[var(--muted)] space-y-1">
+            <li><span className="font-bold text-[var(--text)]">admin</span>：新增/編輯/刪除/CSV 匯入/匯出</li>
+            <li><span className="font-bold text-[var(--text)]">SETVendor</span>：只讀 + 可匯出 CSV + 可切換「搬遷後」4 燈號</li>
+          </ul>
+        </div>
+
+        <div className="mt-4">
+          <button
+            onClick={() => {
+              repairRackIds();
+              alert("已執行資料修復：舊 rackId 會自動轉換成 BEF_/AFT_ 格式");
+            }}
+            className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5"
+          >
+            執行資料修復（舊 RackId）
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -1653,11 +1794,8 @@ function useFullscreen() {
 
   const toggle = async () => {
     try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
-      } else {
-        await document.exitFullscreen();
-      }
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+      else await document.exitFullscreen();
     } catch {
       // ignore
     }
@@ -1675,6 +1813,7 @@ export default function App() {
 
   const isAuthed = useStore((s) => s.isAuthed);
   const userName = useStore((s) => s.userName);
+  const role = useStore((s) => s.role);
   const logout = useStore((s) => s.logout);
 
   const page = useStore((s) => s.page);
@@ -1694,12 +1833,18 @@ export default function App() {
 
   const { isFs, toggle: toggleFs } = useFullscreen();
 
-  const navItems = [
-    { id: "dashboard", label: "儀表板", icon: <LayoutDashboard size={20} /> },
-    { id: "devices", label: "設備管理", icon: <Server size={20} /> },
-    { id: "before", label: "搬遷前規劃", icon: <ArrowLeftRight size={20} /> },
-    { id: "after", label: "搬遷後規劃", icon: <ArrowRightLeft size={20} /> },
-  ] as const;
+  const navItems = useMemo(() => {
+    const base = [
+      { id: "dashboard" as const, label: "儀表板", icon: <LayoutDashboard size={20} /> },
+      { id: "devices" as const, label: "設備管理", icon: <Server size={20} /> },
+      { id: "before" as const, label: "搬遷前規劃", icon: <ArrowLeftRight size={20} /> },
+      { id: "after" as const, label: "搬遷後規劃", icon: <ArrowRightLeft size={20} /> },
+    ];
+    if (role === "admin") {
+      base.push({ id: "admin" as const, label: "管理後台", icon: <Shield size={20} /> });
+    }
+    return base;
+  }, [role]);
 
   if (!isAuthed) return <LoginPage />;
 
@@ -1712,10 +1857,7 @@ export default function App() {
         <div className="flex items-center gap-3">
           <div
             className="w-8 h-8 rounded-lg flex items-center justify-center text-black"
-            style={{
-              background: "linear-gradient(135deg,var(--accent),var(--accent2))",
-              boxShadow: "0 0 18px rgba(34,211,238,0.25)",
-            }}
+            style={{ background: "linear-gradient(135deg,var(--accent),var(--accent2))", boxShadow: "0 0 18px rgba(34,211,238,0.25)" }}
           >
             <Server size={18} />
           </div>
@@ -1730,11 +1872,7 @@ export default function App() {
             {isFs ? <Minimize size={18} /> : <Expand size={18} />}
           </button>
 
-          <select
-            value={themeStyle}
-            onChange={(e) => setThemeStyle(e.target.value as ThemeStyle)}
-            className="bg-[var(--panel2)] border border-[var(--border)] rounded-lg text-xs px-2 py-1 outline-none hidden sm:block"
-          >
+          <select value={themeStyle} onChange={(e) => setThemeStyle(e.target.value as ThemeStyle)} className="bg-[var(--panel2)] border border-[var(--border)] rounded-lg text-xs px-2 py-1 outline-none hidden sm:block">
             <option value="neon">Neon</option>
             <option value="graphite">Graphite</option>
             <option value="aurora">Aurora</option>
@@ -1745,16 +1883,18 @@ export default function App() {
             {theme === "dark" ? "🌙" : "☀️"}
           </button>
 
-          {/* ✅ 下一步：顯示登入者 + 登出 */}
+          {/* User badge */}
           <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border)] bg-black/10">
             <User size={16} className="text-[var(--muted)]" />
             <span className="text-sm font-bold">{userName || "-"}</span>
-            <button onClick={logout} className="ml-2 p-1 rounded-lg hover:bg-white/10" title="登出">
+            <span className="text-xs px-2 py-0.5 rounded-lg border border-[var(--border)] text-[var(--muted)]">
+              {role === "admin" ? "Admin" : "SETVendor"}
+            </span>
+            <button onClick={logout} className="ml-1 p-1 rounded-lg hover:bg-white/10" title="登出">
               <LogOut size={16} className="text-[var(--muted)]" />
             </button>
           </div>
 
-          {/* Mobile logout */}
           <button onClick={logout} className="md:hidden p-2 hover:bg-white/5 rounded-xl" title="登出">
             <LogOut size={18} />
           </button>
@@ -1797,20 +1937,15 @@ export default function App() {
           </div>
         </nav>
 
-        {/* Content Area */}
+        {/* Content */}
         <main className="flex-1 min-w-0">
           <AnimatePresence mode="wait">
-            <motion.div
-              key={page}
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.2 }}
-            >
+            <motion.div key={page} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}>
               {page === "dashboard" && <Dashboard />}
               {page === "devices" && <DevicesPage />}
               {page === "before" && <RackPlanner mode="before" />}
               {page === "after" && <RackPlanner mode="after" />}
+              {page === "admin" && <AdminPage />}
             </motion.div>
           </AnimatePresence>
         </main>
