@@ -1,113 +1,60 @@
-// ✅ CLEAN SAFE VERSION – no broken string literals
-import React, { useEffect, useMemo, useState } from "react";
-import { create } from "zustand";
-import { motion, AnimatePresence } from "framer-motion";
-import { Server, LayoutDashboard } from "lucide-react";
+function downloadCSV(devices: Device[]) {
+  const headers = [
+    "category",
+    "deviceId",
+    "name",
+    "brand",
+    "model",
+    "ports",
+    "sizeU",
+    "ip",
+    "serial",
+    "beforeRackId",
+    "beforeStartU",
+    "beforeEndU",
+    "afterRackId",
+    "afterStartU",
+    "afterEndU",
+    "racked",
+    "cabled",
+    "powered",
+    "tested",
+  ];
 
-// ---------------- TYPES ----------------
+  const esc = (v: any) => {
+    const s = String(v ?? "");
+    const needs = s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r");
+    return needs ? `"${s.replace(/"/g, '""')}"` : s;
+  };
 
-type ThemeMode = "dark" | "light";
+  const rows = devices.map((d) => [
+    d.category,
+    d.deviceId,
+    d.name,
+    d.brand,
+    d.model,
+    d.ports,
+    d.sizeU,
+    d.ip ?? "",
+    d.serial ?? "",
+    d.beforeRackId ?? "",
+    d.beforeStartU ?? "",
+    d.beforeEndU ?? "",
+    d.afterRackId ?? "",
+    d.afterStartU ?? "",
+    d.afterEndU ?? "",
+    d.migration?.racked ?? false,
+    d.migration?.cabled ?? false,
+    d.migration?.powered ?? false,
+    d.migration?.tested ?? false,
+  ]);
 
-type Device = {
-  id: string;
-  name: string;
-};
-
-// ---------------- STORE ----------------
-
-interface Store {
-  theme: ThemeMode;
-  devices: Device[];
-  toggleTheme: () => void;
-}
-
-const useStore = create<Store>((set) => ({
-  theme: "dark",
-  devices: [{ id: "1", name: "Core Switch" }],
-  toggleTheme: () =>
-    set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
-}));
-
-// ---------------- THEME ----------------
-
-const ThemeTokens = () => {
-  const theme = useStore((s) => s.theme);
-
-  const light = `
-    :root{
-      --bg:#ffffff;
-      --text:#111827;
-      --panel:#f3f4f6;
-      --accent:#2563eb;
-    }
-  `;
-
-  const dark = `
-    html.dark{
-      --bg:#0b1220;
-      --text:#f3f4f6;
-      --panel:#1f2937;
-      --accent:#38bdf8;
-    }
-  `;
-
-  return <style>{light + dark}</style>;
-};
-
-// ---------------- APP ----------------
-
-export default function App() {
-  const { theme, toggleTheme, devices } = useStore();
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-  }, [theme]);
-
-  return (
-    <div
-      style={{
-        background: "var(--bg)",
-        color: "var(--text)",
-        minHeight: "100vh",
-        padding: "40px",
-        fontFamily: "sans-serif",
-      }}
-    >
-      <ThemeTokens />
-
-      <h1 style={{ fontSize: "28px", fontWeight: 900 }}>
-        <Server size={28} style={{ marginRight: 10 }} />
-        Migration Project
-      </h1>
-
-      <button
-        onClick={toggleTheme}
-        style={{
-          marginTop: 20,
-          padding: "10px 20px",
-          background: "var(--accent)",
-          border: "none",
-          color: "white",
-          borderRadius: 8,
-          cursor: "pointer",
-        }}
-      >
-        Toggle Theme
-      </button>
-
-      <div
-        style={{
-          marginTop: 40,
-          padding: 20,
-          background: "var(--panel)",
-          borderRadius: 12,
-        }}
-      >
-        <h2>Device List</h2>
-        {devices.map((d) => (
-          <div key={d.id}>{d.name}</div>
-        ))}
-      </div>
-    </div>
-  );
+  const csv = `${headers.join(",")}\n${rows.map((r) => r.map(esc).join(",")).join("\n")}`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `devices_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
