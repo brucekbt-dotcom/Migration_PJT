@@ -1434,12 +1434,37 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
 
   return (
     <div className="p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div>
-          <h2 className="text-2xl font-black text-[var(--accent)]">{mode === "before" ? "搬遷前" : "搬遷後"} 機櫃佈局</h2>
-          <p className="text-[var(--muted)] text-sm">拖拉設備到機櫃；點設備可看詳細資訊{mode === "after" ? "（可即時切換狀態）" : ""}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+  <div>
+    <h2 className="text-2xl font-black text-[var(--accent)]">
+      {mode === "before" ? "搬遷前" : "搬遷後"} 機櫃佈局
+    </h2>
+    <p className="text-[var(--muted)] text-sm">
+      拖拉設備到機櫃；點設備可看詳細資訊{mode === "after" ? "（可即時切換狀態）" : ""}
+    </p>
+  </div>
+
+  {/* Legend (右上角) */}
+  <div className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl px-4 py-3 shadow-xl">
+    <div className="text-xs font-black text-[var(--muted)] mb-2">設備類別顏色</div>
+    <div className="flex flex-wrap gap-3 text-xs font-bold">
+      {([
+        ["Network", "Network"],
+        ["Server", "Server"],
+        ["Storage", "Storage"],
+        ["Other", "Other"],
+      ] as [string, DeviceCategory][]).map(([label, cat]) => (
+        <div key={label} className="flex items-center gap-2">
+          <span
+            className="inline-block w-3.5 h-3.5 rounded-md border border-black/20"
+            style={{ backgroundColor: catColorVar(cat) }}
+          />
+          <span className="text-[var(--text)]">{label}</span>
         </div>
-      </div>
+      ))}
+    </div>
+  </div>
+</div>
 
       <div className="space-y-6">
         {rows.map((row, idx) => (
@@ -1501,7 +1526,13 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                               className="relative"
                               style={{ height: U_H }}
                             >
-                              <div className="absolute inset-x-0 top-0 h-px bg-white/15" />
+                              <div
+  className="absolute inset-x-0 top-0"
+  style={{
+    height: u % 5 === 0 ? 2 : 1,
+    backgroundColor: u % 5 === 0 ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.15)",
+  }}
+/>
                               <div className="absolute inset-0 hover:bg-white/[0.03]" />
                             </div>
                           );
@@ -1514,31 +1545,24 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                         const catColor = catColorVar(d.category);
 
                         return (
-                          <div
-                            key={d.id}
-                            draggable
-                            onDragStart={(ev) => {
-                              ev.dataTransfer.setData("text/plain", d.id);
-                              ev.dataTransfer.effectAllowed = "move";
-                            }}
-                            onMouseEnter={(ev) => {
-                              const rect = (ev.currentTarget as HTMLDivElement).getBoundingClientRect();
-                              setHover({ x: rect.right + 10, y: rect.top, device: d, mode });
-                            }}
-                            onMouseLeave={() => setHover(null)}
-                            onClick={() => setDetailId(d.id)}
-                            className="absolute left-1 right-1 border border-white/70 text-white cursor-pointer select-none"
-                            style={{
-                              bottom,
-                              height,
-                              backgroundColor: `${catColor}`,
+<div
+  key={d.id}
+  draggable
+  ...
+  className="absolute left-1 right-1 border border-black/30 text-black cursor-pointer select-none"
+  style={{
+    bottom,
+    height,
+    backgroundColor: `${catColor}`,
+  }}
+>
                             }}
                             title={`${d.brand} ${d.model}`}
                           >
                             <div className="h-full w-full px-2 py-1 relative">
                               <div className="pr-12">
-                                <div className="text-[11px] font-black truncate">{d.deviceId}</div>
-                                <div className="text-[10px] opacity-90 truncate">{d.name}</div>
+                                <div className="text-[13px] font-black truncate">{d.deviceId}</div>
+                                <div className="text-[12px] font-extrabold truncate opacity-95">{d.name}</div>
                               </div>
 
                               {/* 小燈靠右下，避免跟 X 擠在一起 */}
@@ -1563,9 +1587,7 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                     </div>
                   </div>
 
-                  <div className="mt-2 text-[10px] text-[var(--muted)]">
-                    提示：拖拉設備可重新配置；放置時會做 U 重疊檢查。
-                  </div>
+
                 </div>
               </div>
             ))}
