@@ -1,3 +1,4 @@
+// DEPLOY_MARKER_20260228_0059
 // ✅ CLEAN SAFE VERSION – no broken string literals
 import React, { useEffect, useMemo, useState } from "react";
 import { create } from "zustand";
