@@ -516,12 +516,13 @@ function downloadCSV(devices: Device[]) {
     "powered",
     "tested",
   ];
+
   const esc = (v: any) => {
     const s = String(v ?? "");
-const needs =
-  s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r");
+    const needs = s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r");
     return needs ? `"${s.replace(/"/g, '""')}"` : s;
   };
+
   const rows = devices.map((d) => [
     d.category,
     d.deviceId,
@@ -538,16 +539,13 @@ const needs =
     d.afterRackId ?? "",
     d.afterStartU ?? "",
     d.afterEndU ?? "",
-    d.migration.racked,
-    d.migration.cabled,
-    d.migration.powered,
-    d.migration.tested,
+    d.migration?.racked ?? false,
+    d.migration?.cabled ?? false,
+    d.migration?.powered ?? false,
+    d.migration?.tested ?? false,
   ]);
 
-  const csv =
-    headers.join(",") + "
-" + rows.map((r) => r.map(esc).join(",")).join("
-");
+  const csv = `${headers.join(",")}\n${rows.map((r) => r.map(esc).join(",")).join("\n")}`;
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
