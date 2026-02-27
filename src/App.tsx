@@ -101,20 +101,23 @@ type UiState = { sideCollapsed: boolean; afterPanelCollapsed: boolean };
 const DEFAULT_UI: UiState = { sideCollapsed: false, afterPanelCollapsed: false };
 
 const mockRacks: Rack[] = [
-  ...["A1", "A2", "A3", "A4", "A5", "A6"].map((n) => ({
-    id: n,
-    name: n,
-    units: 42,
-  })),
-  ...["B1", "B2", "B3", "B4", "B5", "B6"].map((n) => ({
-    id: n,
-    name: n,
-    units: 42,
-  })),
-  ...["HUB 15A", "HUB 15B", "HUB 16A", "HUB 16B", "HUB 17A", "HUB 17B"].map(
-    (n) => ({ id: n, name: n, units: 42 })
-  ),
-  { id: "SmartHouse 20F", name: "SmartHouse 20F", units: 42 },
+  // --- 搬遷前 racks ---
+  ...["B10", "B9", "B8", "B7", "B6"].map((n) => ({ id: n, name: n, units: 42 })),
+  ...["A5", "A4", "A3", "A2", "A1"].map((n) => ({ id: n, name: n, units: 42 })),
+  ...["2F-A", "2F-B", "3F-A", "3F-B", "4F-A", "4F-B"].map((n) => ({ id: n, name: n, units: 42 })),
+  ...["9F", "SmartHouseA", "SmartHouseB"].map((n) => ({ id: n, name: n, units: 42 })),
+
+  // --- 搬遷後 racks ---
+  ...["A1", "A2", "A3", "A4", "A5", "A6"].map((n) => ({ id: n, name: n, units: 42 })),
+  ...["B1", "B2", "B3", "B4", "B5", "B6"].map((n) => ({ id: n, name: n, units: 42 })),
+  ...["HUB 15L", "HUB 15R", "HUB 16L", "HUB 16R", "HUB 17L", "HUB 17R"].map((n) => ({ id: n, name: n, units: 42 })),
+  ...[
+    { id: "HUB 20F", name: "HUB 20F" },
+    { id: "SmartHouse 20F", name: "SmartHouse 20F" },
+    { id: "不搬存放區A", name: "不搬存放區A" },
+    { id: "不搬存放區B", name: "不搬存放區B" },
+    { id: "不搬存放區C", name: "不搬存放區C" },
+  ].map((r) => ({ ...r, units: 42 })),
 ];
 
 const mockDevices: Device[] = [
@@ -454,8 +457,9 @@ const ThemeTokens = () => {
         "html.dark{--bg:#060714;--panel:#0b0b1a;--panel2:#0b1220;--text:#f8fafc;--muted:#a1a1aa;--border:#27272a;--accent:#a78bfa;--accent2:#22d3ee;--catNetwork:#4ade80;--catStorage:#7dd3fc;--catServer:#c4b5fd;--catOther:#fde047;--lampOn:#4ade80;--lampOff:#ef4444}",
     },
   };
-const css = presets[style] || presets.neon;
-return <style>{`${css.light}\n${css.dark}`}</style>;
+  const css = presets[style] || presets.neon;
+  return <style>{css.light + "
+" + css.dark}</style>;
 };
 
 // -----------------------------
@@ -464,22 +468,33 @@ return <style>{`${css.light}\n${css.dark}`}</style>;
 
 const Lamp = ({ on }: { on: boolean }) => (
   <span
-    className="inline-block w-1.5 h-1.5 rounded-full"
+    className="inline-block w-2.5 h-2.5 rounded-full"
     style={{
       backgroundColor: on ? "var(--lampOn)" : "var(--lampOff)",
       boxShadow: on
-        ? "0 0 8px var(--lampOn)"
-        : "0 0 8px rgba(239,68,68,0.35)",
+        ? "0 0 10px var(--lampOn)"
+        : "0 0 10px rgba(239,68,68,0.35)",
     }}
   />
 );
 
+// 設備管理頁：四顆燈橫式（放大）
 const Lamps = ({ m }: { m: MigrationFlags }) => (
-  <div className="grid grid-cols-2 gap-1 place-items-end">
+  <div className="flex items-center gap-2">
     <Lamp on={m.racked} />
     <Lamp on={m.cabled} />
     <Lamp on={m.powered} />
     <Lamp on={m.tested} />
+  </div>
+);
+
+// 機櫃內：小燈（避免擠到 X 按鈕）
+const RackLamps = ({ m }: { m: MigrationFlags }) => (
+  <div className="flex items-center gap-1">
+    <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: m.racked ? "var(--lampOn)" : "var(--lampOff)" }} />
+    <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: m.cabled ? "var(--lampOn)" : "var(--lampOff)" }} />
+    <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: m.powered ? "var(--lampOn)" : "var(--lampOff)" }} />
+    <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: m.tested ? "var(--lampOn)" : "var(--lampOff)" }} />
   </div>
 );
 
@@ -516,13 +531,14 @@ function downloadCSV(devices: Device[]) {
     "powered",
     "tested",
   ];
-
   const esc = (v: any) => {
     const s = String(v ?? "");
-    const needs = s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r");
+    const needs =
+      s.includes(",") || s.includes('"') || s.includes("
+") || s.includes("
+");
     return needs ? `"${s.replace(/"/g, '""')}"` : s;
   };
-
   const rows = devices.map((d) => [
     d.category,
     d.deviceId,
@@ -539,13 +555,16 @@ function downloadCSV(devices: Device[]) {
     d.afterRackId ?? "",
     d.afterStartU ?? "",
     d.afterEndU ?? "",
-    d.migration?.racked ?? false,
-    d.migration?.cabled ?? false,
-    d.migration?.powered ?? false,
-    d.migration?.tested ?? false,
+    d.migration.racked,
+    d.migration.cabled,
+    d.migration.powered,
+    d.migration.tested,
   ]);
 
-  const csv = `${headers.join(",")}\n${rows.map((r) => r.map(esc).join(",")).join("\n")}`;
+  const csv =
+    headers.join(",") + "
+" + rows.map((r) => r.map(esc).join(",")).join("
+");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1240,6 +1259,22 @@ type HoverInfo = {
   mode: PlacementMode;
 };
 
+const BEFORE_LAYOUT: string[][] = [
+  ["B10", "B9", "B8", "B7", "B6"],
+  ["A5", "A4", "A3", "A2", "A1"],
+  ["2F-A", "2F-B", "3F-A", "3F-B", "4F-A", "4F-B"],
+  ["9F", "SmartHouseA", "SmartHouseB"],
+];
+
+const AFTER_LAYOUT: string[][] = [
+  ["A1", "A2", "A3", "A4", "A5", "A6"],
+  ["B1", "B2", "B3", "B4", "B5", "B6"],
+  ["HUB 15L", "HUB 15R", "HUB 16L", "HUB 16R", "HUB 17L", "HUB 17R"],
+  ["HUB 20F", "SmartHouse 20F", "不搬存放區A", "不搬存放區B", "不搬存放區C"],
+];
+
+const isNoMoveRack = (rackName: string) => rackName.startsWith("不搬存放區");
+
 const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
   const racks = useStore((s) => s.racks);
   const devices = useStore((s) => s.devices);
@@ -1255,16 +1290,18 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
   const [detail, setDetail] = useState<Device | null>(null);
   const [addFromU, setAddFromU] = useState<{ rackId: string; startU: number } | null>(null);
 
-  // 4 rows like requested
-  const rows = useMemo(
-    () => [
-      racks.slice(0, 6),
-      racks.slice(6, 12),
-      racks.slice(12, 18),
-      racks.slice(18, 19),
-    ],
-    [racks]
-  );
+    const rackById = useMemo(() => {
+    const m = new Map<string, Rack>();
+    racks.forEach((r) => m.set(r.id, r));
+    return m;
+  }, [racks]);
+
+  const rows = useMemo(() => {
+    const layout = mode === "before" ? BEFORE_LAYOUT : AFTER_LAYOUT;
+    return layout
+      .map((ids) => ids.map((id) => rackById.get(id)).filter(Boolean) as Rack[])
+      .filter((r) => r.length > 0);
+  }, [mode, rackById]);
 
   const listForRack = (rackId: string) =>
     devices
