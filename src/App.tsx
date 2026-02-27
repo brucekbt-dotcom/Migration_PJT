@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -23,6 +23,8 @@ import {
   Expand,
   Minimize,
   Shield,
+  KeyRound,
+  Save,
 } from "lucide-react";
 import {
   BarChart,
@@ -87,30 +89,17 @@ type DeviceDraft = {
 
 type UiState = {
   sideCollapsed: boolean;
-  // 未放置設備面板收合（兩頁共用）
   unplacedCollapsedBefore: boolean;
   unplacedCollapsedAfter: boolean;
 };
 
 type LoginResult = { ok: boolean; message?: string };
 
-/* -----------------------------
-  Auth
------------------------------ */
-
-const AUTH_USERS = [
-  { user: "admin", pass: "migration123", role: "admin" as Role },
-  { user: "SETVendor", pass: "migration666", role: "vendor" as Role },
-] as const;
-
-const roleOf = (u: string | null): Role => {
-  if (u === "admin") return "admin";
-  return "vendor";
+type Account = {
+  username: string;
+  password: string;
+  role: Role;
 };
-
-const canManageAssets = (role: Role) => role === "admin"; // 新增/刪除/匯入/編輯
-const canExportCSV = (_role: Role) => true; // admin & vendor 都可
-const canToggleFlags = (_role: Role) => true; // admin & vendor 都可
 
 /* -----------------------------
   LocalStorage Keys
@@ -123,6 +112,7 @@ const LS = {
   ui: "migrate.ui",
   auth: "migrate.auth",
   user: "migrate.user",
+  accounts: "migrate.accounts",
 } as const;
 
 /* -----------------------------
@@ -195,6 +185,23 @@ const mockDevices: Device[] = [
 ];
 
 /* -----------------------------
+  Default accounts
+----------------------------- */
+
+const DEFAULT_ACCOUNTS: Account[] = [
+  { username: "admin", password: "migration123", role: "admin" },
+  { username: "Vendor", password: "migration666", role: "vendor" },
+];
+
+/* -----------------------------
+  Permissions
+----------------------------- */
+
+const canManageAssets = (role: Role) => role === "admin"; // 拖放/新增刪除匯入/編輯
+const canExportCSV = (_role: Role) => true;
+const canToggleFlags = (_role: Role) => true;
+
+/* -----------------------------
   Utils
 ----------------------------- */
 
@@ -223,8 +230,6 @@ const writeJson = (k: string, v: any) => {
 };
 
 const isProbablyOldRackId = (v: string) => {
-  // 舊資料可能是 "A1" / "B6" / "HUB 15A" / "SmartHouse 20F" / "9F" 等
-  // 新資料我們要 BEF_/AFT_ 前綴
   if (!v) return false;
   return !v.startsWith("BEF_") && !v.startsWith("AFT_");
 };
@@ -254,7 +259,6 @@ const normalizeDevices = (raw: any[]): Device[] => {
     let beforeRackId: string | undefined = d?.beforeRackId ?? undefined;
     let afterRackId: string | undefined = d?.afterRackId ?? undefined;
 
-    // ✅ 修復舊資料：A1/B1 這種沒有前綴的 rackId
     if (beforeRackId && isProbablyOldRackId(beforeRackId)) beforeRackId = toBeforeRackId(beforeRackId);
     if (afterRackId && isProbablyOldRackId(afterRackId)) afterRackId = toAfterRackId(afterRackId);
 
@@ -290,19 +294,23 @@ const normalizeDevices = (raw: any[]): Device[] => {
 };
 
 /* -----------------------------
-  Category Colors（避開紅綠，跟燈號不打架）
+  Category Colors（你指定灰系色）
+  Storage: 灰藍
+  Network: 灰綠
+  Server: 灰紫
+  Other: 深黃色
 ----------------------------- */
 
 const catColorVar = (cat: DeviceCategory) => {
   switch (cat) {
     case "Network":
-      return "var(--catNetwork)"; // teal
+      return "var(--catNetwork)";
     case "Storage":
-      return "var(--catStorage)"; // cyan
+      return "var(--catStorage)";
     case "Server":
-      return "var(--catServer)"; // indigo
+      return "var(--catServer)";
     default:
-      return "var(--catOther)"; // amber/brown
+      return "var(--catOther)";
   }
 };
 
@@ -313,30 +321,31 @@ const catColorVar = (cat: DeviceCategory) => {
 const ThemeTokens = () => {
   const style = useStore((s) => s.themeStyle);
 
+  // 這裡只處理「類別色」與基礎主題，類別色全部換成你指定的灰系色
   const presets: Record<ThemeStyle, { light: string; dark: string }> = {
     neon: {
       light:
-        ":root{--bg:#f7fafc;--panel:#ffffff;--panel2:#f1f5f9;--text:#0b1220;--muted:#475569;--border:#e2e8f0;--accent:#06b6d4;--accent2:#a855f7;--onColor:#f8fafc;--catNetwork:#0f766e;--catStorage:#0891b2;--catServer:#4338ca;--catOther:#b45309;--lampOn:#22c55e;--lampOff:#ef4444}",
+        ":root{--bg:#f7fafc;--panel:#ffffff;--panel2:#f1f5f9;--text:#0b1220;--muted:#475569;--border:#e2e8f0;--accent:#06b6d4;--accent2:#a855f7;--onColor:#f8fafc;--catNetwork:#6f8f7d;--catStorage:#6a86a6;--catServer:#7a6fa3;--catOther:#b58a1a;--lampOn:#22c55e;--lampOff:#ef4444}",
       dark:
-        "html.dark{--bg:#05070d;--panel:#0b1220;--panel2:#1a2235;--text:#e5e7eb;--muted:#94a3b8;--border:#1e293b;--accent:#22d3ee;--accent2:#c084fc;--onColor:#f8fafc;--catNetwork:#2dd4bf;--catStorage:#22d3ee;--catServer:#818cf8;--catOther:#f59e0b;--lampOn:#22c55e;--lampOff:#ef4444}",
+        "html.dark{--bg:#05070d;--panel:#0b1220;--panel2:#1a2235;--text:#e5e7eb;--muted:#94a3b8;--border:#1e293b;--accent:#22d3ee;--accent2:#c084fc;--onColor:#f8fafc;--catNetwork:#8fb3a0;--catStorage:#8fb0d3;--catServer:#a79ad9;--catOther:#e0b83a;--lampOn:#22c55e;--lampOff:#ef4444}",
     },
     graphite: {
       light:
-        ":root{--bg:#f6f7fb;--panel:#ffffff;--panel2:#eef2f7;--text:#0a0e16;--muted:#6b7280;--border:#e5e7eb;--accent:#3b82f6;--accent2:#111827;--onColor:#f8fafc;--catNetwork:#0f766e;--catStorage:#0284c7;--catServer:#1d4ed8;--catOther:#a16207;--lampOn:#22c55e;--lampOff:#ef4444}",
+        ":root{--bg:#f6f7fb;--panel:#ffffff;--panel2:#eef2f7;--text:#0a0e16;--muted:#6b7280;--border:#e5e7eb;--accent:#3b82f6;--accent2:#111827;--onColor:#f8fafc;--catNetwork:#6f8f7d;--catStorage:#6a86a6;--catServer:#7a6fa3;--catOther:#b58a1a;--lampOn:#22c55e;--lampOff:#ef4444}",
       dark:
-        "html.dark{--bg:#070a0f;--panel:#0b0f18;--panel2:#0a0e16;--text:#f3f4f6;--muted:#9ca3af;--border:#1f2937;--accent:#38bdf8;--accent2:#94a3b8;--onColor:#f8fafc;--catNetwork:#2dd4bf;--catStorage:#38bdf8;--catServer:#60a5fa;--catOther:#fbbf24;--lampOn:#22c55e;--lampOff:#ef4444}",
+        "html.dark{--bg:#070a0f;--panel:#0b0f18;--panel2:#0a0e16;--text:#f3f4f6;--muted:#9ca3af;--border:#1f2937;--accent:#38bdf8;--accent2:#94a3b8;--onColor:#f8fafc;--catNetwork:#8fb3a0;--catStorage:#8fb0d3;--catServer:#a79ad9;--catOther:#e0b83a;--lampOn:#22c55e;--lampOff:#ef4444}",
     },
     aurora: {
       light:
-        ":root{--bg:#f7fbff;--panel:#ffffff;--panel2:#eef6ff;--text:#081120;--muted:#64748b;--border:#e2e8f0;--accent:#14b8a6;--accent2:#6366f1;--onColor:#f8fafc;--catNetwork:#0f766e;--catStorage:#0369a1;--catServer:#4f46e5;--catOther:#a16207;--lampOn:#22c55e;--lampOff:#ef4444}",
+        ":root{--bg:#f7fbff;--panel:#ffffff;--panel2:#eef6ff;--text:#081120;--muted:#64748b;--border:#e2e8f0;--accent:#14b8a6;--accent2:#6366f1;--onColor:#f8fafc;--catNetwork:#6f8f7d;--catStorage:#6a86a6;--catServer:#7a6fa3;--catOther:#b58a1a;--lampOn:#22c55e;--lampOff:#ef4444}",
       dark:
-        "html.dark{--bg:#050913;--panel:#0b1220;--panel2:#081225;--text:#f1f5f9;--muted:#94a3b8;--border:#334155;--accent:#2dd4bf;--accent2:#a5b4fc;--onColor:#f8fafc;--catNetwork:#34d399;--catStorage:#67e8f9;--catServer:#818cf8;--catOther:#fbbf24;--lampOn:#22c55e;--lampOff:#ef4444}",
+        "html.dark{--bg:#050913;--panel:#0b1220;--panel2:#081225;--text:#f1f5f9;--muted:#94a3b8;--border:#334155;--accent:#2dd4bf;--accent2:#a5b4fc;--onColor:#f8fafc;--catNetwork:#8fb3a0;--catStorage:#8fb0d3;--catServer:#a79ad9;--catOther:#e0b83a;--lampOn:#22c55e;--lampOff:#ef4444}",
     },
     circuit: {
       light:
-        ":root{--bg:#f7f9ff;--panel:#ffffff;--panel2:#edf0ff;--text:#0b1020;--muted:#6b7280;--border:#e2e8f0;--accent:#7c3aed;--accent2:#06b6d4;--onColor:#f8fafc;--catNetwork:#0f766e;--catStorage:#0284c7;--catServer:#4338ca;--catOther:#a16207;--lampOn:#22c55e;--lampOff:#ef4444}",
+        ":root{--bg:#f7f9ff;--panel:#ffffff;--panel2:#edf0ff;--text:#0b1020;--muted:#6b7280;--border:#e2e8f0;--accent:#7c3aed;--accent2:#06b6d4;--onColor:#f8fafc;--catNetwork:#6f8f7d;--catStorage:#6a86a6;--catServer:#7a6fa3;--catOther:#b58a1a;--lampOn:#22c55e;--lampOff:#ef4444}",
       dark:
-        "html.dark{--bg:#060714;--panel:#0b0b1a;--panel2:#0b1220;--text:#f8fafc;--muted:#a1a1aa;--border:#27272a;--accent:#a78bfa;--accent2:#22d3ee;--onColor:#f8fafc;--catNetwork:#2dd4bf;--catStorage:#7dd3fc;--catServer:#c4b5fd;--catOther:#fde047;--lampOn:#22c55e;--lampOff:#ef4444}",
+        "html.dark{--bg:#060714;--panel:#0b0b1a;--panel2:#0b1220;--text:#f8fafc;--muted:#a1a1aa;--border:#27272a;--accent:#a78bfa;--accent2:#22d3ee;--onColor:#f8fafc;--catNetwork:#8fb3a0;--catStorage:#8fb0d3;--catServer:#a79ad9;--catOther:#e0b83a;--lampOn:#22c55e;--lampOff:#ef4444}",
     },
   };
 
@@ -352,21 +361,21 @@ function useApplyTheme() {
 }
 
 /* -----------------------------
-  Lamps
+  Lamps（更緊密、右下更靠）
 ----------------------------- */
 
 const Lamp = ({ on }: { on: boolean }) => (
   <span
-    className="inline-block w-2.5 h-2.5 rounded-full"
+    className="inline-block w-2 h-2 rounded-full"
     style={{
       backgroundColor: on ? "var(--lampOn)" : "var(--lampOff)",
-      boxShadow: on ? "0 0 10px var(--lampOn)" : "0 0 10px rgba(239,68,68,0.35)",
+      boxShadow: on ? "0 0 8px var(--lampOn)" : "0 0 8px rgba(239,68,68,0.3)",
     }}
   />
 );
 
 const LampsRow = ({ m }: { m: MigrationFlags }) => (
-  <div className="flex items-center gap-2">
+  <div className="flex items-center gap-1">
     <Lamp on={m.racked} />
     <Lamp on={m.cabled} />
     <Lamp on={m.powered} />
@@ -496,6 +505,11 @@ interface Store {
   selectedDeviceId: string | null;
   ui: UiState;
 
+  // accounts
+  accounts: Account[];
+  upsertAccount: (a: Account) => { ok: boolean; message?: string };
+  deleteAccount: (username: string) => { ok: boolean; message?: string };
+
   // auth
   isAuthed: boolean;
   userName: string | null;
@@ -512,7 +526,7 @@ interface Store {
 
   addDevice: (draft: DeviceDraft) => void;
   updateDevice: (id: string, patch: Partial<DeviceDraft>) => void;
-  deleteDevice: (id: string) => void;
+  deleteDeviceById: (id: string) => void;
 
   importDevices: (drafts: DeviceDraft[]) => void;
 
@@ -521,7 +535,6 @@ interface Store {
 
   setMigrationFlag: (id: string, patch: Partial<MigrationFlags>) => void;
 
-  // maintenance
   repairRackIds: () => void;
 }
 
@@ -530,6 +543,21 @@ const DEFAULT_UI: UiState = {
   unplacedCollapsedBefore: false,
   unplacedCollapsedAfter: false,
 };
+
+function loadAccounts(): Account[] {
+  const stored = readJson<Account[]>(LS.accounts, []);
+  const valid = Array.isArray(stored) ? stored : [];
+  if (valid.length === 0) {
+    writeJson(LS.accounts, DEFAULT_ACCOUNTS);
+    return DEFAULT_ACCOUNTS;
+  }
+  // ensure admin exists & is admin
+  const hasAdmin = valid.some((a) => a.username === "admin");
+  const patched = hasAdmin ? valid : [{ username: "admin", password: "migration123", role: "admin" as Role }, ...valid];
+  const fixedAdmin = patched.map((a) => (a.username === "admin" ? { ...a, role: "admin" as Role } : a));
+  writeJson(LS.accounts, fixedAdmin);
+  return fixedAdmin;
+}
 
 const useStore = create<Store>((set, get) => ({
   beforeRacks: BEFORE_RACKS,
@@ -542,16 +570,48 @@ const useStore = create<Store>((set, get) => ({
   selectedDeviceId: null,
   ui: { ...DEFAULT_UI, ...readJson<UiState>(LS.ui, DEFAULT_UI) },
 
+  accounts: loadAccounts(),
+
+  upsertAccount: (a) => {
+    const username = a.username.trim();
+    if (!username) return { ok: false, message: "帳號不可為空" };
+    if (username.includes(" ")) return { ok: false, message: "帳號不可包含空白" };
+    if (!a.password) return { ok: false, message: "密碼不可為空" };
+    if (a.username === "admin" && a.role !== "admin") return { ok: false, message: "admin 必須是 Admin 權限" };
+
+    const accounts = get().accounts;
+    const exists = accounts.some((x) => x.username === username);
+    const next = exists ? accounts.map((x) => (x.username === username ? { ...a, username } : x)) : [...accounts, { ...a, username }];
+    writeJson(LS.accounts, next);
+    set({ accounts: next });
+    return { ok: true };
+  },
+
+  deleteAccount: (username) => {
+    if (username === "admin") return { ok: false, message: "admin 不能刪除" };
+    const accounts = get().accounts;
+    const next = accounts.filter((a) => a.username !== username);
+    writeJson(LS.accounts, next);
+    set({ accounts: next });
+    return { ok: true };
+  },
+
   isAuthed: localStorage.getItem(LS.auth) === "1",
   userName: localStorage.getItem(LS.user) || null,
-  role: roleOf(localStorage.getItem(LS.user) || null),
+  role: ((() => {
+    const u = localStorage.getItem(LS.user);
+    if (u === "admin") return "admin" as Role;
+    return "vendor" as Role;
+  })()),
 
   login: (u, p) => {
-    const found = AUTH_USERS.find((a) => a.user === u && a.pass === p);
+    const username = u.trim();
+    const accounts = get().accounts;
+    const found = accounts.find((a) => a.username === username && a.password === p);
     if (!found) return { ok: false, message: "帳號或密碼錯誤" };
     localStorage.setItem(LS.auth, "1");
-    localStorage.setItem(LS.user, u);
-    set({ isAuthed: true, userName: u, role: found.role, page: "dashboard", selectedDeviceId: null });
+    localStorage.setItem(LS.user, username);
+    set({ isAuthed: true, userName: username, role: found.role, page: "dashboard", selectedDeviceId: null });
     return { ok: true };
   },
 
@@ -601,7 +661,7 @@ const useStore = create<Store>((set, get) => ({
       return { devices: next };
     }),
 
-  deleteDevice: (id) =>
+  deleteDeviceById: (id) =>
     set((s) => {
       const next = s.devices.filter((d) => d.id !== id);
       writeJson(LS.devices, next);
@@ -690,7 +750,7 @@ const useStore = create<Store>((set, get) => ({
 }));
 
 /* -----------------------------
-  Login Page（提示帳密明顯顯示）
+  Login Page（移除帳密提示）
 ----------------------------- */
 
 function LoginPage() {
@@ -719,15 +779,6 @@ function LoginPage() {
           </div>
         </div>
 
-        {/* ✅ 明顯的帳密提示 */}
-        <div className="mt-5 p-4 rounded-2xl border border-[var(--border)] bg-[var(--panel2)]">
-          <div className="text-sm font-black mb-2">可用帳號 / 密碼</div>
-          <div className="text-sm text-[var(--muted)] leading-6">
-            <div><span className="font-bold text-[var(--text)]">admin</span> / <span className="font-bold text-[var(--text)]">migration123</span>（管理員）</div>
-            <div><span className="font-bold text-[var(--text)]">SETVendor</span> / <span className="font-bold text-[var(--text)]">migration666</span>（只能查看/切換燈號）</div>
-          </div>
-        </div>
-
         <div className="mt-5 space-y-3">
           <div>
             <label className="text-xs text-[var(--muted)]">帳號</label>
@@ -735,7 +786,7 @@ function LoginPage() {
               className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
               value={u}
               onChange={(e) => setU(e.target.value)}
-              placeholder="admin 或 SETVendor"
+              placeholder="請輸入帳號"
               autoComplete="username"
             />
           </div>
@@ -778,21 +829,18 @@ function Switch({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean
     <button
       disabled={disabled}
       onClick={() => onChange(!on)}
-      className={`w-11 h-6 rounded-full border transition-all ${
-        disabled ? "opacity-50 cursor-not-allowed" : ""
-      } ${on ? "bg-[var(--lampOn)]/20 border-[var(--lampOn)]" : "bg-black/20 border-[var(--border)]"}`}
+      className={`w-11 h-6 rounded-full border transition-all ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${
+        on ? "bg-[var(--lampOn)]/20 border-[var(--lampOn)]" : "bg-black/20 border-[var(--border)]"
+      }`}
       style={{ boxShadow: on ? "0 0 16px rgba(34,197,94,0.25)" : "none" }}
     >
-      <span
-        className="block w-5 h-5 rounded-full bg-white transition-all"
-        style={{ transform: `translateX(${on ? "20px" : "2px"})` }}
-      />
+      <span className="block w-5 h-5 rounded-full bg-white transition-all" style={{ transform: `translateX(${on ? "20px" : "2px"})` }} />
     </button>
   );
 }
 
 /* -----------------------------
-  Device Detail Modal（搬遷後可切換狀態：即時更新）
+  Device Detail Modal
 ----------------------------- */
 
 function DeviceDetailModal({ id, mode, onClose }: { id: string; mode: PlacementMode; onClose: () => void }) {
@@ -812,13 +860,11 @@ function DeviceDetailModal({ id, mode, onClose }: { id: string; mode: PlacementM
       ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U`
       : "-";
 
+  const allowLayout = canManageAssets(role);
+
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-      <motion.div
-        initial={{ scale: 0.96, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl"
-      >
+      <motion.div initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl">
         <div className="p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -865,35 +911,19 @@ function DeviceDetailModal({ id, mode, onClose }: { id: string; mode: PlacementM
               <div className="mt-4 grid grid-cols-1 gap-3">
                 <div className="flex items-center justify-between">
                   <div className="text-sm">已上架</div>
-                  <Switch
-                    on={d.migration.racked}
-                    onChange={(v) => canToggleFlags(role) && setFlag(d.id, { racked: v })}
-                    disabled={!canToggleFlags(role)}
-                  />
+                  <Switch on={d.migration.racked} onChange={(v) => canToggleFlags(role) && setFlag(d.id, { racked: v })} disabled={!canToggleFlags(role)} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-sm">已接線</div>
-                  <Switch
-                    on={d.migration.cabled}
-                    onChange={(v) => canToggleFlags(role) && setFlag(d.id, { cabled: v })}
-                    disabled={!canToggleFlags(role)}
-                  />
+                  <Switch on={d.migration.cabled} onChange={(v) => canToggleFlags(role) && setFlag(d.id, { cabled: v })} disabled={!canToggleFlags(role)} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-sm">已開機</div>
-                  <Switch
-                    on={d.migration.powered}
-                    onChange={(v) => canToggleFlags(role) && setFlag(d.id, { powered: v })}
-                    disabled={!canToggleFlags(role)}
-                  />
+                  <Switch on={d.migration.powered} onChange={(v) => canToggleFlags(role) && setFlag(d.id, { powered: v })} disabled={!canToggleFlags(role)} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-sm">已測試</div>
-                  <Switch
-                    on={d.migration.tested}
-                    onChange={(v) => canToggleFlags(role) && setFlag(d.id, { tested: v })}
-                    disabled={!canToggleFlags(role)}
-                  />
+                  <Switch on={d.migration.tested} onChange={(v) => canToggleFlags(role) && setFlag(d.id, { tested: v })} disabled={!canToggleFlags(role)} />
                 </div>
               </div>
             ) : (
@@ -902,19 +932,145 @@ function DeviceDetailModal({ id, mode, onClose }: { id: string; mode: PlacementM
           </div>
 
           <div className="mt-4 flex justify-between">
-            <button
-              onClick={() => {
-                if (confirm("確定清除此設備在本頁面的位置？")) clearPlacement(mode, d.id);
-                onClose();
-              }}
-              className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5"
-            >
-              清除本頁位置
-            </button>
+            {allowLayout ? (
+              <button
+                onClick={() => {
+                  if (confirm("確定清除此設備在本頁面的位置？")) clearPlacement(mode, d.id);
+                  onClose();
+                }}
+                className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5"
+              >
+                清除本頁位置
+              </button>
+            ) : (
+              <div className="text-xs text-[var(--muted)]">Vendor：只能查看/切換燈號，不能調整機櫃佈局</div>
+            )}
+
             <button onClick={onClose} className="px-4 py-2 rounded-xl bg-[var(--accent)] text-black font-extrabold hover:opacity-90">
               關閉
             </button>
           </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+/* -----------------------------
+  Device Modal（新增/編輯）
+----------------------------- */
+
+function DeviceModal({
+  title,
+  initial,
+  onClose,
+  onSave,
+}: {
+  title: string;
+  initial: DeviceDraft;
+  onClose: () => void;
+  onSave: (d: DeviceDraft) => void;
+}) {
+  const [d, setD] = useState<DeviceDraft>(initial);
+  const portsOptions = [8, 16, 24, 48, 72];
+
+  const input = (k: keyof DeviceDraft) => (e: any) =>
+    setD((p) => ({ ...p, [k]: e.target.value } as any));
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-2xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl">
+        <div className="p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xl font-black text-[var(--text)]">{title}</div>
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5" aria-label="close">
+              <X />
+            </button>
+          </div>
+
+          <form
+            className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!d.deviceId.trim() || !d.name.trim()) return alert("請填寫設備編號與設備名稱");
+              onSave({
+                ...d,
+                ports: Number(d.ports) || 0,
+                sizeU: Math.max(1, Math.min(42, Number(d.sizeU) || 1)),
+              });
+            }}
+          >
+            <div>
+              <label className="text-xs text-[var(--muted)]">類別</label>
+              <select className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.category} onChange={input("category") as any}>
+                {(["Network", "Storage", "Server", "Other"] as DeviceCategory[]).map((x) => (
+                  <option key={x} value={x}>
+                    {x}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">設備編號</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" value={d.deviceId} onChange={input("deviceId")} placeholder="EX: SW-01" />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">設備名稱</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" value={d.name} onChange={input("name")} />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">廠牌</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.brand} onChange={input("brand")} />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">型號</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.model} onChange={input("model")} />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">Port數量</label>
+              <select className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={String(d.ports)} onChange={(e) => setD((p) => ({ ...p, ports: Number(e.target.value) }))}>
+                {portsOptions.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">占用高度(U)</label>
+              <input type="number" min={1} max={42} className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.sizeU} onChange={(e) => setD((p) => ({ ...p, sizeU: Number(e.target.value) || 1 }))} />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">設備IP</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.ip ?? ""} onChange={input("ip")} placeholder="10.0.0.10" />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted)]">序號</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.serial ?? ""} onChange={input("serial")} />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-xs text-[var(--muted)]">Port對接備註</label>
+              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.portMap ?? ""} onChange={input("portMap")} placeholder="EX: Gi1/0/1 -> Firewall WAN" />
+            </div>
+
+            <div className="md:col-span-2 flex justify-end gap-3 mt-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5">
+                取消
+              </button>
+              <button type="submit" className="px-4 py-2 rounded-xl bg-[var(--accent)] text-black font-extrabold hover:opacity-90">
+                儲存
+              </button>
+            </div>
+          </form>
         </div>
       </motion.div>
     </div>
@@ -928,7 +1084,7 @@ function DeviceDetailModal({ id, mode, onClose }: { id: string; mode: PlacementM
 const Dashboard = () => {
   const devices = useStore((s) => s.devices);
 
-  const racked = devices.filter((d) => d.migration.racked).length; // 已上架
+  const racked = devices.filter((d) => d.migration.racked).length;
   const completed = devices.filter((d) => isMigratedComplete(d.migration)).length;
   const pending = Math.max(0, devices.length - completed);
 
@@ -950,22 +1106,11 @@ const Dashboard = () => {
     <div className="p-6 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((s, i) => (
-          <motion.div
-            key={s.label}
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.06 }}
-            className="bg-[var(--panel)] border border-[var(--border)] p-6 rounded-2xl shadow-xl"
-          >
+          <motion.div key={s.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} className="bg-[var(--panel)] border border-[var(--border)] p-6 rounded-2xl shadow-xl">
             <div className="text-[var(--muted)] flex items-center gap-2 mb-2">
               {s.icon} {s.label}
             </div>
-            <div
-              className="text-3xl font-black"
-              style={{
-                color: s.tone === "green" ? "var(--lampOn)" : s.tone === "red" ? "var(--lampOff)" : "var(--accent)",
-              }}
-            >
+            <div className="text-3xl font-black" style={{ color: s.tone === "green" ? "var(--lampOn)" : s.tone === "red" ? "var(--lampOff)" : "var(--accent)" }}>
               {s.value}
             </div>
           </motion.div>
@@ -1035,7 +1180,7 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
       const ports = Number(get("ports") || 0);
       const sizeU = Math.max(1, Math.min(42, Number(get("sizeU") || 1)));
       return {
-        category: ["Network", "Storage", "Server", "Other"].includes(category) ? category : "Other",
+        category: (["Network", "Storage", "Server", "Other"].includes(category) ? category : "Other") as DeviceCategory,
         deviceId: get("deviceId"),
         name: get("name"),
         brand: get("brand"),
@@ -1054,11 +1199,7 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-      <motion.div
-        initial={{ scale: 0.96, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl"
-      >
+      <motion.div initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl">
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div className="text-xl font-black">CSV 匯入設備</div>
@@ -1067,15 +1208,10 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
             </button>
           </div>
 
-          <div className="mt-3 text-sm text-[var(--muted)]">
-            拖曳 CSV 到下方區域，或點擊選取檔案。也可先下載範本。
-          </div>
+          <div className="mt-3 text-sm text-[var(--muted)]">拖曳 CSV 到下方區域，或點擊選取檔案。也可先下載範本。</div>
 
           <div className="mt-4 flex gap-2">
-            <button
-              onClick={downloadCSVTemplate}
-              className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2"
-            >
+            <button onClick={downloadCSVTemplate} className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2">
               <Download size={16} /> 下載範本
             </button>
           </div>
@@ -1090,9 +1226,7 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
               const file = e.dataTransfer.files?.[0];
               if (file) handleFile(file);
             }}
-            className={`mt-4 block w-full rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-all ${
-              drag ? "border-[var(--accent)] bg-white/5" : "border-[var(--border)] bg-black/10"
-            }`}
+            className={`mt-4 block w-full rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-all ${drag ? "border-[var(--accent)] bg-white/5" : "border-[var(--border)] bg-black/10"}`}
           >
             <input
               type="file"
@@ -1104,125 +1238,13 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
               }}
             />
             <div className="flex flex-col items-center gap-3">
-              <div
-                className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                style={{ background: "linear-gradient(135deg,var(--accent),var(--accent2))" }}
-              >
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "linear-gradient(135deg,var(--accent),var(--accent2))" }}>
                 <Upload className="text-black" />
               </div>
               <div className="font-black">拖曳 CSV 到這裡上傳</div>
               <div className="text-xs text-[var(--muted)]">或點擊選取檔案</div>
             </div>
           </label>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-/* -----------------------------
-  Device Modal（Admin only）
------------------------------ */
-
-function DeviceModal({
-  title,
-  initial,
-  onClose,
-  onSave,
-}: {
-  title: string;
-  initial: DeviceDraft;
-  onClose: () => void;
-  onSave: (d: DeviceDraft) => void;
-}) {
-  const [d, setD] = useState<DeviceDraft>(initial);
-  const portsOptions = [8, 16, 24, 48, 72];
-  const input = (k: keyof DeviceDraft) => (e: any) => setD((p) => ({ ...p, [k]: e.target.value } as any));
-
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <motion.div initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-2xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl">
-        <div className="p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-xl font-black text-[var(--text)]">{title}</div>
-            <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5" aria-label="close">
-              <X />
-            </button>
-          </div>
-
-          <form
-            className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!d.deviceId.trim() || !d.name.trim()) return alert("請填寫設備編號與設備名稱");
-              onSave({
-                ...d,
-                ports: Number(d.ports) || 0,
-                sizeU: Math.max(1, Math.min(42, Number(d.sizeU) || 1)),
-              });
-            }}
-          >
-            <div>
-              <label className="text-xs text-[var(--muted)]">類別</label>
-              <select className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.category} onChange={input("category") as any}>
-                {(["Network", "Storage", "Server", "Other"] as DeviceCategory[]).map((x) => (
-                  <option key={x} value={x}>{x}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">設備編號</label>
-              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" value={d.deviceId} onChange={input("deviceId")} placeholder="EX: SW-01" />
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">設備名稱</label>
-              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" value={d.name} onChange={input("name")} />
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">廠牌</label>
-              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.brand} onChange={input("brand")} />
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">型號</label>
-              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.model} onChange={input("model")} />
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">Port數量</label>
-              <select className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={String(d.ports)} onChange={(e) => setD((p) => ({ ...p, ports: Number(e.target.value) }))}>
-                {portsOptions.map((p) => (<option key={p} value={p}>{p}</option>))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">占用高度(U)</label>
-              <input type="number" min={1} max={42} className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.sizeU} onChange={(e) => setD((p) => ({ ...p, sizeU: Number(e.target.value) || 1 }))} />
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">設備IP</label>
-              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.ip ?? ""} onChange={input("ip")} placeholder="10.0.0.10" />
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]">序號</label>
-              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.serial ?? ""} onChange={input("serial")} />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="text-xs text-[var(--muted)]">Port對接備註</label>
-              <input className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none" value={d.portMap ?? ""} onChange={input("portMap")} placeholder="EX: Gi1/0/1 -> Firewall WAN" />
-            </div>
-
-            <div className="md:col-span-2 flex justify-end gap-3 mt-2">
-              <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5">取消</button>
-              <button type="submit" className="px-4 py-2 rounded-xl bg-[var(--accent)] text-black font-extrabold hover:opacity-90">儲存</button>
-            </div>
-          </form>
         </div>
       </motion.div>
     </div>
@@ -1237,7 +1259,7 @@ const DevicesPage = () => {
   const devices = useStore((s) => s.devices);
   const addDevice = useStore((s) => s.addDevice);
   const updateDevice = useStore((s) => s.updateDevice);
-  const deleteDevice = useStore((s) => s.deleteDevice);
+  const deleteDeviceById = useStore((s) => s.deleteDeviceById);
   const clearPlacement = useStore((s) => s.clearPlacement);
   const setSelectedDeviceId = useStore((s) => s.setSelectedDeviceId);
   const role = useStore((s) => s.role);
@@ -1254,7 +1276,7 @@ const DevicesPage = () => {
         <div>
           <h2 className="text-2xl font-black text-[var(--accent)]">設備資產清單</h2>
           <p className="text-[var(--muted)] text-sm">
-            {allowManage ? "新增/編輯/刪除設備；刪除會同步移除搬遷前與搬遷後機櫃配置。" : "你目前為 SETVendor 權限：可查看、可匯出 CSV、可切換搬遷後燈號。"}
+            {allowManage ? "新增/編輯/刪除設備；刪除會同步移除搬遷前與搬遷後機櫃配置。" : "你目前為 Vendor 權限：可查看、可匯出 CSV、可切換搬遷後燈號，但不能調整機櫃佈局/新增/刪除/匯入。"}
           </p>
         </div>
 
@@ -1294,22 +1316,13 @@ const DevicesPage = () => {
 
           <tbody className="divide-y divide-[var(--border)]">
             {devices.map((d) => {
-              const before =
-                d.beforeRackId && d.beforeStartU != null
-                  ? `${d.beforeRackId.replace(/^BEF_/, "")} ${d.beforeStartU}-${d.beforeEndU}U`
-                  : "-";
-              const after =
-                d.afterRackId && d.afterStartU != null
-                  ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U`
-                  : "-";
+              const before = d.beforeRackId && d.beforeStartU != null ? `${d.beforeRackId.replace(/^BEF_/, "")} ${d.beforeStartU}-${d.beforeEndU}U` : "-";
+              const after = d.afterRackId && d.afterStartU != null ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U` : "-";
 
               return (
                 <tr key={d.id} className="hover:bg-white/[0.02] transition-colors group">
                   <td className="px-6 py-4">
-                    <span
-                      className="text-[10px] font-extrabold px-2 py-1 rounded-md border"
-                      style={{ color: "var(--onColor)", borderColor: "rgba(255,255,255,0.35)", backgroundColor: catColorVar(d.category) }}
-                    >
+                    <span className="text-[10px] font-extrabold px-2 py-1 rounded-md border" style={{ color: "var(--onColor)", borderColor: "rgba(255,255,255,0.35)", backgroundColor: catColorVar(d.category) }}>
                       {d.category}
                     </span>
                   </td>
@@ -1338,7 +1351,7 @@ const DevicesPage = () => {
                   </td>
 
                   <td className="px-6 py-4 text-right">
-                    {canManageAssets(role) ? (
+                    {allowManage ? (
                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => setEditing(d)} className="p-2 hover:bg-white/10 rounded-lg text-[var(--accent)]" title="編輯">
                           <Edit3 size={16} />
@@ -1355,7 +1368,7 @@ const DevicesPage = () => {
                         </button>
                         <button
                           onClick={() => {
-                            if (confirm(`確定刪除 ${d.deviceId} - ${d.name}？`)) deleteDevice(d.id);
+                            if (confirm(`確定刪除 ${d.deviceId} - ${d.name}？`)) deleteDeviceById(d.id);
                           }}
                           className="p-2 hover:bg-white/10 rounded-lg text-red-400"
                           title="刪除"
@@ -1440,7 +1453,100 @@ const RackLegend = () => (
 const isNoMoveRack = (name: string) => name.startsWith("不搬存放區");
 
 /* -----------------------------
-  Rack Planner（修正：未放置清單可見 + 拖拉可用 + 變0自動收合）
+  Unplaced Panel（上方，不佔左右）
+----------------------------- */
+
+function UnplacedPanel({
+  mode,
+  unplaced,
+  collapsed,
+  setCollapsed,
+  allowLayout,
+}: {
+  mode: PlacementMode;
+  unplaced: Device[];
+  collapsed: boolean;
+  setCollapsed: (v: boolean) => void;
+  allowLayout: boolean;
+}) {
+  useEffect(() => {
+    if (unplaced.length === 0 && !collapsed) setCollapsed(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unplaced.length]);
+
+  return (
+    <div className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
+      <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="font-black">未放置設備</div>
+          <div className="text-xs text-[var(--muted)]">
+            {unplaced.length === 0 ? "全部已放置（已自動收合）" : `${unplaced.length} 台`}
+          </div>
+          <div className="hidden md:block">
+            <RackLegend />
+          </div>
+        </div>
+
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="px-3 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2 text-sm"
+          title="收合/展開"
+        >
+          {collapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
+          {collapsed ? "展開" : "收合"}
+        </button>
+      </div>
+
+      {!collapsed && (
+        <div className="p-4">
+          {unplaced.length === 0 ? (
+            <div className="text-sm text-[var(--muted)]">✅ 沒有未放置設備</div>
+          ) : (
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {unplaced.map((d) => (
+                <div
+                  key={d.id}
+                  draggable={allowLayout}
+                  onDragStart={(ev) => {
+                    if (!allowLayout) return;
+                    ev.dataTransfer.setData("text/plain", d.id);
+                    ev.dataTransfer.effectAllowed = "move";
+                  }}
+                  className={`min-w-[260px] p-3 rounded-2xl border border-[var(--border)] hover:bg-white/[0.03] ${
+                    allowLayout ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-90"
+                  }`}
+                  title={allowLayout ? "拖曳到機櫃" : "Vendor 不允許拖放"}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-black text-[var(--text)] truncate">{d.deviceId}</div>
+                      <div className="text-xs text-[var(--muted)] truncate">{d.name}</div>
+                      <div className="text-xs text-[var(--muted)] mt-1 truncate">
+                        {d.brand} · {d.model} · {d.sizeU}U
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-extrabold px-2 py-1 rounded-md border" style={{ color: "var(--onColor)", borderColor: "rgba(255,255,255,0.35)", backgroundColor: catColorVar(d.category) }}>
+                      {d.category}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-2 text-xs text-[var(--muted)]">
+            {allowLayout
+              ? `提示：把設備拖到左側機櫃（${mode === "before" ? "搬遷前" : "搬遷後"}）`
+              : "Vendor：只能查看/切換搬遷後燈號，不能拖放"}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* -----------------------------
+  Rack Planner（未放置移到上方）
 ----------------------------- */
 
 const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
@@ -1452,8 +1558,10 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
   const ui = useStore((s) => s.ui);
   const setUi = useStore((s) => s.setUi);
   const repairRackIds = useStore((s) => s.repairRackIds);
+  const role = useStore((s) => s.role);
 
-  // ✅ 每次進來先修一次舊資料（很輕量）
+  const allowLayout = canManageAssets(role);
+
   useEffect(() => {
     repairRackIds();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1465,26 +1573,14 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
     const rid = mode === "before" ? d.beforeRackId : d.afterRackId;
     const s = mode === "before" ? d.beforeStartU : d.afterStartU;
     const e = mode === "before" ? d.beforeEndU : d.afterEndU;
-    // ✅ 必須：rackId 存在於目前頁的 racks 且位置完整
     return !!rid && rackIdSet.has(rid) && s != null && e != null;
   };
 
   const unplaced = useMemo(() => devices.filter((d) => !isPlaced(d)), [devices, rackIdSet, mode]);
 
-  // ✅ 變成 0 => 自動收合
-  useEffect(() => {
-    if (unplaced.length === 0) {
-      if (mode === "before" && !ui.unplacedCollapsedBefore) setUi({ unplacedCollapsedBefore: true });
-      if (mode === "after" && !ui.unplacedCollapsedAfter) setUi({ unplacedCollapsedAfter: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unplaced.length, mode]);
-
   const collapsed = mode === "before" ? ui.unplacedCollapsedBefore : ui.unplacedCollapsedAfter;
-  const setCollapsed = (v: boolean) =>
-    setUi(mode === "before" ? { unplacedCollapsedBefore: v } : { unplacedCollapsedAfter: v });
+  const setCollapsed = (v: boolean) => setUi(mode === "before" ? { unplacedCollapsedBefore: v } : { unplacedCollapsedAfter: v });
 
-  // rows: 每排最多6
   const rows = useMemo(() => {
     const out: Rack[][] = [];
     let cur: Rack[] = [];
@@ -1501,10 +1597,7 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
 
   const listForRack = (rackId: string) =>
     devices
-      .filter((d) => {
-        const rid = mode === "before" ? d.beforeRackId : d.afterRackId;
-        return rid === rackId;
-      })
+      .filter((d) => (mode === "before" ? d.beforeRackId === rackId : d.afterRackId === rackId))
       .filter((d) => {
         const s = mode === "before" ? d.beforeStartU : d.afterStartU;
         const e = mode === "before" ? d.beforeEndU : d.afterEndU;
@@ -1530,6 +1623,7 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
 
   const onDrop = (e: React.DragEvent, rackId: string, u: number) => {
     e.preventDefault();
+    if (!allowLayout) return;
     const id = e.dataTransfer.getData("text/plain");
     if (!id) return;
     const res = place(mode, id, rackId, u);
@@ -1537,94 +1631,90 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <div className="p-6 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-black text-[var(--accent)]">
-            {mode === "before" ? "搬遷前" : "搬遷後"} 機櫃佈局
-          </h2>
+          <h2 className="text-2xl font-black text-[var(--accent)]">{mode === "before" ? "搬遷前" : "搬遷後"} 機櫃佈局</h2>
           <p className="text-[var(--muted)] text-sm">
-            拖拉設備到機櫃；已放置設備也可再拖拉調整位置（含 U 重疊檢查）
+            {allowLayout ? "拖拉設備到機櫃；已放置設備也可再拖拉調整位置（含 U 重疊檢查）" : "Vendor：只能查看（不可拖放/不可調整機櫃佈局），但可在搬遷後切換燈號"}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <RackLegend />
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="px-3 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2 text-sm"
-            title="收合/展開未放置清單"
-          >
-            {collapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
-            未放置({unplaced.length})
-          </button>
+          <div className="hidden md:block">
+            <RackLegend />
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
-        {/* Left racks */}
-        <div className="space-y-6">
-          {rows.map((row, idx) => (
-            <div key={idx} className="grid gap-4" style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}>
-              {row.map((rack) => (
-                <div key={rack.id} className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
-                  <div
-                    className="bg-black/30 text-center py-2 font-mono text-sm border-b border-[var(--border)]"
-                    style={{ color: mode === "after" && isNoMoveRack(rack.name) ? "var(--lampOff)" : "var(--accent)" }}
-                  >
-                    {rack.name}
-                  </div>
+      {/* ✅ 未放置設備移到上方 */}
+      <UnplacedPanel mode={mode} unplaced={unplaced} collapsed={collapsed} setCollapsed={setCollapsed} allowLayout={allowLayout} />
 
-                  <div className="p-3">
-                    <div className="flex gap-2">
-                      {/* scale */}
-                      <div className="relative">
-                        <div className="relative flex flex-col-reverse">
-                          {Array.from({ length: 42 }).map((_, i) => {
-                            const u = i + 1;
-                            return (
-                              <div key={u} className="w-8 pr-1 text-right text-[10px] leading-none text-[var(--muted)]" style={{ height: U_H }}>
-                                {u}
-                              </div>
-                            );
-                          })}
-                        </div>
+      <div className="space-y-6">
+        {rows.map((row, idx) => (
+          <div key={idx} className="grid gap-4" style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}>
+            {row.map((rack) => (
+              <div key={rack.id} className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
+                <div
+                  className="bg-black/30 text-center py-2 font-mono text-sm border-b border-[var(--border)]"
+                  style={{ color: mode === "after" && isNoMoveRack(rack.name) ? "var(--lampOff)" : "var(--accent)" }}
+                >
+                  {rack.name}
+                </div>
+
+                <div className="p-3">
+                  <div className="flex gap-2">
+                    <div className="relative">
+                      <div className="relative flex flex-col-reverse">
+                        {Array.from({ length: 42 }).map((_, i) => {
+                          const u = i + 1;
+                          return (
+                            <div key={u} className="w-8 pr-1 text-right text-[10px] leading-none text-[var(--muted)]" style={{ height: U_H }}>
+                              {u}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="relative flex-1 border border-[var(--border)] bg-black/20" style={{ height: 42 * U_H }}>
+                      <div className="absolute inset-0 flex flex-col-reverse">
+                        {Array.from({ length: 42 }).map((_, i) => {
+                          const u = i + 1;
+                          const thick = u % 5 === 0;
+                          return (
+                            <div key={u} onDragOver={(e) => allowLayout && e.preventDefault()} onDrop={(e) => onDrop(e, rack.id, u)} className="relative" style={{ height: U_H }}>
+                              <div className="absolute inset-x-0 top-0" style={{ height: thick ? 2 : 1, background: thick ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.15)" }} />
+                              <div className="absolute inset-0 hover:bg-white/[0.03]" />
+                            </div>
+                          );
+                        })}
                       </div>
 
-                      {/* rack grid */}
-                      <div className="relative flex-1 border border-[var(--border)] bg-black/20" style={{ height: 42 * U_H }}>
-                        <div className="absolute inset-0 flex flex-col-reverse">
-                          {Array.from({ length: 42 }).map((_, i) => {
-                            const u = i + 1;
-                            const thick = u % 5 === 0;
-                            return (
-                              <div key={u} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, rack.id, u)} className="relative" style={{ height: U_H }}>
-                                <div className="absolute inset-x-0 top-0" style={{ height: thick ? 2 : 1, background: thick ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.15)" }} />
-                                <div className="absolute inset-0 hover:bg-white/[0.03]" />
-                              </div>
-                            );
-                          })}
-                        </div>
+                      {listForRack(rack.id).map((d) => {
+                        const { bottom, height } = getBlockStyle(d);
+                        const catColor = catColorVar(d.category);
 
-                        {/* devices */}
-                        {listForRack(rack.id).map((d) => {
-                          const { bottom, height } = getBlockStyle(d);
-                          const catColor = catColorVar(d.category);
-
-                          return (
-                            <div
-                              key={d.id}
-                              draggable
-                              onDragStart={(ev) => {
-                                ev.dataTransfer.setData("text/plain", d.id);
-                                ev.dataTransfer.effectAllowed = "move";
-                              }}
-                              onClick={() => setSelectedDeviceId(d.id)}
-                              className="absolute left-1 right-1 border border-white/70 cursor-pointer select-none"
-                              style={{ bottom, height, backgroundColor: catColor }}
-                            >
-                              <div className="h-full w-full px-2 py-1">
-                                {/* Clear */}
+                        return (
+                          <div
+                            key={d.id}
+                            draggable={allowLayout}
+                            onDragStart={(ev) => {
+                              if (!allowLayout) return;
+                              ev.dataTransfer.setData("text/plain", d.id);
+                              ev.dataTransfer.effectAllowed = "move";
+                            }}
+                            onClick={() => setSelectedDeviceId(d.id)}
+                            className="absolute left-1 right-1 border border-white/70 cursor-pointer select-none"
+                            style={{
+                              bottom,
+                              height,
+                              backgroundColor: catColor,
+                              cursor: allowLayout ? "grab" : "pointer",
+                            }}
+                          >
+                            <div className="h-full w-full px-2 py-1">
+                              {allowLayout && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1635,105 +1725,50 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                                 >
                                   <X size={14} className="text-white" />
                                 </button>
+                              )}
 
-                                {/* Text */}
-                                <div className="pr-8">
-                                  <div className="text-[13px] font-black truncate" style={{ color: "var(--onColor)" }}>
-                                    {d.deviceId}
-                                  </div>
-                                  <div className="text-[12px] font-bold truncate" style={{ color: "var(--onColor)", opacity: 0.95 }}>
-                                    {d.name}
-                                  </div>
+                              <div className="pr-8">
+                                <div className="text-[13px] font-black truncate" style={{ color: "var(--onColor)" }}>
+                                  {d.deviceId}
                                 </div>
-
-                                {/* Lamps right-bottom */}
-                                <div className="absolute right-2 bottom-2">
-                                  <LampsRow m={d.migration} />
+                                <div className="text-[12px] font-bold truncate" style={{ color: "var(--onColor)", opacity: 0.95 }}>
+                                  {d.name}
                                 </div>
                               </div>
+
+                              {/* ✅ 更靠右下、排列更緊密 */}
+                              <div className="absolute right-1 bottom-1">
+                                <LampsRow m={d.migration} />
+                              </div>
                             </div>
-                          );
-                        })}
-                      </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          ))}
-        </div>
-
-        {/* Right panel: unplaced list */}
-        <div className="relative">
-          {collapsed ? (
-            <div className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-black">未放置設備</div>
-                  <div className="text-xs text-[var(--muted)]">目前：{unplaced.length} 台</div>
-                </div>
-                <button onClick={() => setCollapsed(false)} className="px-3 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2 text-sm">
-                  <PanelRightOpen size={16} /> 展開
-                </button>
               </div>
-            </div>
-          ) : (
-            <div className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
-              <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-black">未放置設備</div>
-                  <div className="text-xs text-[var(--muted)]">拖曳到左側機櫃（{unplaced.length} 台）</div>
-                </div>
-                <button onClick={() => setCollapsed(true)} className="p-2 rounded-xl hover:bg-white/5" title="收合">
-                  <PanelRightClose />
-                </button>
-              </div>
-
-              <div className="p-4 space-y-3 max-h-[calc(100vh-220px)] overflow-auto">
-                {unplaced.length === 0 ? (
-                  <div className="text-sm text-[var(--muted)]">✅ 全部設備都已放置（已自動收合）</div>
-                ) : (
-                  unplaced.map((d) => (
-                    <div
-                      key={d.id}
-                      draggable
-                      onDragStart={(ev) => {
-                        ev.dataTransfer.setData("text/plain", d.id);
-                        ev.dataTransfer.effectAllowed = "move";
-                      }}
-                      onClick={() => setSelectedDeviceId(d.id)}
-                      className="p-3 rounded-2xl border border-[var(--border)] hover:bg-white/[0.03] cursor-grab active:cursor-grabbing"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-sm font-black text-[var(--text)] truncate">{d.deviceId}</div>
-                          <div className="text-xs text-[var(--muted)] truncate">{d.name}</div>
-                          <div className="text-xs text-[var(--muted)] mt-1 truncate">{d.brand} · {d.model} · {d.sizeU}U</div>
-                        </div>
-                        <span className="text-[10px] font-extrabold px-2 py-1 rounded-md border" style={{ color: "var(--onColor)", borderColor: "rgba(255,255,255,0.35)", backgroundColor: catColorVar(d.category) }}>
-                          {d.category}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   );
 };
 
 /* -----------------------------
-  Admin Page（簡易管理後台）
+  Admin Page（帳號管理）
 ----------------------------- */
 
 const AdminPage = () => {
-  const user = useStore((s) => s.userName);
   const role = useStore((s) => s.role);
-  const repairRackIds = useStore((s) => s.repairRackIds);
+  const user = useStore((s) => s.userName);
+  const accounts = useStore((s) => s.accounts);
+  const upsertAccount = useStore((s) => s.upsertAccount);
+  const deleteAccount = useStore((s) => s.deleteAccount);
+
+  const [editing, setEditing] = useState<Account | null>(null);
+  const [creating, setCreating] = useState(false);
 
   if (role !== "admin") {
     return (
@@ -1746,35 +1781,185 @@ const AdminPage = () => {
     );
   }
 
+  const Modal = ({
+    title,
+    initial,
+    onClose,
+  }: {
+    title: string;
+    initial: Account;
+    onClose: () => void;
+  }) => {
+    const [a, setA] = useState<Account>(initial);
+    const isAdminAccount = a.username === "admin";
+
+    return (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+        <motion.div initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl">
+          <div className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="text-xl font-black flex items-center gap-2">
+                <KeyRound className="text-[var(--accent)]" /> {title}
+              </div>
+              <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5">
+                <X />
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-[var(--muted)]">帳號</label>
+                <input
+                  className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  value={a.username}
+                  onChange={(e) => setA((p) => ({ ...p, username: e.target.value }))}
+                  disabled={!creating} // 編輯時不允許改帳號，避免對應麻煩
+                />
+                {!creating && <div className="text-[11px] text-[var(--muted)] mt-1">編輯時不可更改帳號（需新增新帳號）</div>}
+              </div>
+
+              <div>
+                <label className="text-xs text-[var(--muted)]">權限</label>
+                <select
+                  className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none"
+                  value={a.role}
+                  onChange={(e) => setA((p) => ({ ...p, role: e.target.value as Role }))}
+                  disabled={isAdminAccount} // admin 不允許變更為 vendor
+                >
+                  <option value="admin">Admin</option>
+                  <option value="vendor">Vendor</option>
+                </select>
+                {isAdminAccount && <div className="text-[11px] text-[var(--muted)] mt-1">admin 必須保持 Admin 權限</div>}
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-xs text-[var(--muted)]">密碼</label>
+                <input
+                  type="password"
+                  className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  value={a.password}
+                  onChange={(e) => setA((p) => ({ ...p, password: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button onClick={onClose} className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5">
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  const res = upsertAccount(a);
+                  if (!res.ok) return alert(res.message || "儲存失敗");
+                  onClose();
+                }}
+                className="px-4 py-2 rounded-xl bg-[var(--accent)] text-black font-extrabold hover:opacity-90 flex items-center gap-2"
+              >
+                <Save size={16} /> 儲存
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-6">
-        <div className="flex items-center gap-2">
-          <Shield className="text-[var(--accent)]" />
-          <div className="text-lg font-black">Admin 管理後台</div>
-        </div>
-        <div className="text-sm text-[var(--muted)] mt-2">登入者：<span className="text-[var(--text)] font-bold">{user}</span></div>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2">
+              <Shield className="text-[var(--accent)]" />
+              <div className="text-lg font-black">管理後台：帳號管理</div>
+            </div>
+            <div className="text-sm text-[var(--muted)] mt-2">
+              目前登入：<span className="text-[var(--text)] font-bold">{user}</span>（Admin）
+            </div>
+          </div>
 
-        <div className="mt-4 p-4 rounded-2xl border border-[var(--border)] bg-[var(--panel2)]">
-          <div className="font-black mb-2">帳號與權限</div>
-          <ul className="text-sm text-[var(--muted)] space-y-1">
-            <li><span className="font-bold text-[var(--text)]">admin</span>：新增/編輯/刪除/CSV 匯入/匯出</li>
-            <li><span className="font-bold text-[var(--text)]">SETVendor</span>：只讀 + 可匯出 CSV + 可切換「搬遷後」4 燈號</li>
-          </ul>
-        </div>
-
-        <div className="mt-4">
-          <button
-            onClick={() => {
-              repairRackIds();
-              alert("已執行資料修復：舊 rackId 會自動轉換成 BEF_/AFT_ 格式");
-            }}
-            className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5"
-          >
-            執行資料修復（舊 RackId）
+          <button onClick={() => { setCreating(true); setEditing({ username: "", password: "", role: "vendor" }); }} className="bg-[var(--accent)] text-black px-4 py-2 rounded-xl font-extrabold flex items-center gap-2 hover:opacity-90">
+            <Plus size={18} /> 新增帳號
           </button>
         </div>
+
+        <div className="mt-5 bg-[var(--panel2)] border border-[var(--border)] rounded-2xl overflow-hidden">
+          <table className="w-full text-left">
+            <thead className="bg-black/20 text-[var(--muted)] text-xs uppercase tracking-wider">
+              <tr>
+                <th className="px-4 py-3 font-semibold">帳號</th>
+                <th className="px-4 py-3 font-semibold">權限</th>
+                <th className="px-4 py-3 font-semibold">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border)]">
+              {accounts
+                .slice()
+                .sort((a, b) => (a.username === "admin" ? -1 : b.username === "admin" ? 1 : a.username.localeCompare(b.username)))
+                .map((a) => (
+                  <tr key={a.username} className="hover:bg-white/[0.03]">
+                    <td className="px-4 py-3">
+                      <div className="font-black">{a.username}</div>
+                      {a.username === "admin" && <div className="text-xs text-[var(--muted)]">admin 不能刪除</div>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs px-2 py-1 rounded-lg border border-[var(--border)] text-[var(--muted)]">
+                        {a.role === "admin" ? "Admin" : "Vendor"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setCreating(false);
+                            setEditing(a);
+                          }}
+                          className="px-3 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2 text-sm"
+                        >
+                          <Edit3 size={16} /> 修改
+                        </button>
+                        <button
+                          onClick={() => {
+                            const res = deleteAccount(a.username);
+                            if (!res.ok) return alert(res.message || "刪除失敗");
+                          }}
+                          disabled={a.username === "admin"}
+                          className={`px-3 py-2 rounded-xl border border-[var(--border)] flex items-center gap-2 text-sm ${
+                            a.username === "admin" ? "opacity-50 cursor-not-allowed" : "hover:bg-white/5 text-red-300"
+                          }`}
+                        >
+                          <Trash2 size={16} /> 刪除
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              {accounts.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-4 py-8 text-center text-[var(--muted)]">
+                    沒有帳號資料
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-4 text-xs text-[var(--muted)]">
+          新增帳號可選 Admin / Vendor；Vendor 只能查看（不可拖放/不可新增刪除匯入），但可切換搬遷後燈號。
+        </div>
       </div>
+
+      {editing && (
+        <Modal
+          title={creating ? "新增帳號" : "修改帳號"}
+          initial={editing}
+          onClose={() => {
+            setEditing(null);
+            setCreating(false);
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -1840,9 +2025,7 @@ export default function App() {
       { id: "before" as const, label: "搬遷前規劃", icon: <ArrowLeftRight size={20} /> },
       { id: "after" as const, label: "搬遷後規劃", icon: <ArrowRightLeft size={20} /> },
     ];
-    if (role === "admin") {
-      base.push({ id: "admin" as const, label: "管理後台", icon: <Shield size={20} /> });
-    }
+    if (role === "admin") base.push({ id: "admin" as const, label: "管理後台", icon: <Shield size={20} /> });
     return base;
   }, [role]);
 
@@ -1852,13 +2035,9 @@ export default function App() {
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] font-sans transition-colors duration-300">
       <ThemeTokens />
 
-      {/* Top Header */}
       <header className="h-16 border-b border-[var(--border)] bg-[var(--panel)]/80 backdrop-blur-md sticky top-0 z-50 flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-3">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-black"
-            style={{ background: "linear-gradient(135deg,var(--accent),var(--accent2))", boxShadow: "0 0 18px rgba(34,211,238,0.25)" }}
-          >
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-black" style={{ background: "linear-gradient(135deg,var(--accent),var(--accent2))", boxShadow: "0 0 18px rgba(34,211,238,0.25)" }}>
             <Server size={18} />
           </div>
           <h1 className="text-lg md:text-xl font-black tracking-tighter uppercase italic">
@@ -1867,7 +2046,6 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2 md:gap-4">
-          {/* Fullscreen */}
           <button onClick={toggleFs} className="p-2 hover:bg-white/5 rounded-xl" title={isFs ? "離開全螢幕" : "全螢幕"}>
             {isFs ? <Minimize size={18} /> : <Expand size={18} />}
           </button>
@@ -1883,13 +2061,10 @@ export default function App() {
             {theme === "dark" ? "🌙" : "☀️"}
           </button>
 
-          {/* User badge */}
           <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border)] bg-black/10">
             <User size={16} className="text-[var(--muted)]" />
             <span className="text-sm font-bold">{userName || "-"}</span>
-            <span className="text-xs px-2 py-0.5 rounded-lg border border-[var(--border)] text-[var(--muted)]">
-              {role === "admin" ? "Admin" : "SETVendor"}
-            </span>
+            <span className="text-xs px-2 py-0.5 rounded-lg border border-[var(--border)] text-[var(--muted)]">{role === "admin" ? "Admin" : "Vendor"}</span>
             <button onClick={logout} className="ml-1 p-1 rounded-lg hover:bg-white/10" title="登出">
               <LogOut size={16} className="text-[var(--muted)]" />
             </button>
@@ -1902,18 +2077,9 @@ export default function App() {
       </header>
 
       <div className="flex">
-        {/* Sidebar */}
-        <nav
-          className={`border-r border-[var(--border)] h-[calc(100vh-64px)] sticky top-16 p-4 bg-[var(--panel)] hidden lg:block transition-all ${
-            ui.sideCollapsed ? "w-20" : "w-64"
-          }`}
-        >
+        <nav className={`border-r border-[var(--border)] h-[calc(100vh-64px)] sticky top-16 p-4 bg-[var(--panel)] hidden lg:block transition-all ${ui.sideCollapsed ? "w-20" : "w-64"}`}>
           <div className="flex justify-end mb-3">
-            <button
-              onClick={() => setUi({ sideCollapsed: !ui.sideCollapsed })}
-              className="p-2 rounded-xl hover:bg-white/5"
-              title={ui.sideCollapsed ? "展開選單" : "收合選單"}
-            >
+            <button onClick={() => setUi({ sideCollapsed: !ui.sideCollapsed })} className="p-2 rounded-xl hover:bg-white/5" title={ui.sideCollapsed ? "展開選單" : "收合選單"}>
               {ui.sideCollapsed ? <ChevronsRight /> : <ChevronsLeft />}
             </button>
           </div>
@@ -1924,9 +2090,7 @@ export default function App() {
                 key={item.id}
                 onClick={() => setPage(item.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  page === item.id
-                    ? "bg-[var(--panel2)] text-[var(--accent)] border border-[var(--border)] shadow-[0_0_20px_rgba(34,211,238,0.1)] font-black"
-                    : "text-[var(--muted)] hover:bg-white/[0.03]"
+                  page === item.id ? "bg-[var(--panel2)] text-[var(--accent)] border border-[var(--border)] shadow-[0_0_20px_rgba(34,211,238,0.1)] font-black" : "text-[var(--muted)] hover:bg-white/[0.03]"
                 }`}
                 title={item.label}
               >
@@ -1937,7 +2101,6 @@ export default function App() {
           </div>
         </nav>
 
-        {/* Content */}
         <main className="flex-1 min-w-0">
           <AnimatePresence mode="wait">
             <motion.div key={page} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}>
@@ -1951,28 +2114,15 @@ export default function App() {
         </main>
       </div>
 
-      {/* Mobile Nav */}
       <div className="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-[var(--panel)] border border-[var(--border)] rounded-2xl px-4 py-2 flex gap-6 shadow-2xl z-50">
         {navItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setPage(item.id)}
-            className={`p-2 rounded-lg ${page === item.id ? "text-[var(--accent)] bg-[var(--panel2)]" : "text-[var(--muted)]"}`}
-            title={item.label}
-          >
+          <button key={item.id} onClick={() => setPage(item.id)} className={`p-2 rounded-lg ${page === item.id ? "text-[var(--accent)] bg-[var(--panel2)]" : "text-[var(--muted)]"}`} title={item.label}>
             {item.icon}
           </button>
         ))}
       </div>
 
-      {/* Device detail */}
-      {selectedDeviceId && (
-        <DeviceDetailModal
-          id={selectedDeviceId}
-          mode={page === "after" ? "after" : "before"}
-          onClose={() => setSelectedDeviceId(null)}
-        />
-      )}
+      {selectedDeviceId && <DeviceDetailModal id={selectedDeviceId} mode={page === "after" ? "after" : "before"} onClose={() => setSelectedDeviceId(null)} />}
     </div>
   );
 }
