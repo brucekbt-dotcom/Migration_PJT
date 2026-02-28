@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { create } from "zustand";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -25,7 +25,8 @@ import {
   Shield,
   KeyRound,
   Save,
-  ArrowUpDown,
+  Sparkles,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   BarChart,
@@ -42,7 +43,7 @@ import {
 ----------------------------- */
 
 type ThemeMode = "dark" | "light";
-type ThemeStyle = "neon" | "holo" | "glass" | "midnightAI";
+type ThemeStyle = "neon" | "horizon" | "nebula" | "matrix";
 type PageKey = "dashboard" | "devices" | "before" | "after" | "admin";
 type DeviceCategory = "Network" | "Storage" | "Server" | "Other";
 type PlacementMode = "before" | "after";
@@ -60,7 +61,6 @@ type Rack = { id: string; name: string; units: number };
 type Device = {
   id: string;
   category: DeviceCategory;
-
   deviceId: string;
   name: string;
   brand: string;
@@ -109,6 +109,14 @@ type Account = {
   role: Role;
 };
 
+type ColorSettings = {
+  catNetwork: string;
+  catStorage: string;
+  catServer: string;
+  catOther: string;
+  rackText: string;
+};
+
 /* -----------------------------
   LocalStorage Keys
 ----------------------------- */
@@ -121,31 +129,33 @@ const LS = {
   auth: "migrate.auth",
   user: "migrate.user",
   accounts: "migrate.accounts",
-  catColors: "migrate.catColors",
-  rackTextColor: "migrate.rackTextColor",
+  colors: "migrate.colors",
 } as const;
 
 /* -----------------------------
-  Rack Layouts（依你指定）
+  Rack Layouts
 ----------------------------- */
 
-// ✅ 搬遷前機櫃佈局：5 / 5 / 6 / 3
 const BEFORE_RACKS: Rack[] = [
+  // 第一排：10, 09, 08, 07, 06
   ...["10", "09", "08", "07", "06"].map((n) => ({
     id: `BEF_${n}`,
     name: n,
     units: 42,
   })),
+  // 第二排：05, 04, 03, 02, 01
   ...["05", "04", "03", "02", "01"].map((n) => ({
     id: `BEF_${n}`,
     name: n,
     units: 42,
   })),
+  // 第三排：2F-A, 2F-B, 3F-A, 3F-B, 4F-A, 4F-B
   ...["2F-A", "2F-B", "3F-A", "3F-B", "4F-A", "4F-B"].map((n) => ({
     id: `BEF_${n}`,
     name: n,
     units: 42,
   })),
+  // 第四排：9F, SmartHouseA, SmartHouseB
   ...["9F", "SmartHouseA", "SmartHouseB"].map((n) => ({
     id: `BEF_${n}`,
     name: n,
@@ -180,6 +190,10 @@ const AFTER_RACKS: Rack[] = [
   ),
 ];
 
+/* -----------------------------
+  Mock Devices
+----------------------------- */
+
 const mockDevices: Device[] = [
   {
     id: "dev-1",
@@ -192,7 +206,7 @@ const mockDevices: Device[] = [
     sizeU: 2,
     ip: "10.0.0.1",
     serial: "",
-    portMap: "",
+    portMap: "A1/40-41U | Gi1/0/1 -> FW\nA1/40-41U | Gi1/0/2 -> Core-RTR",
     beforeRackId: "BEF_01",
     beforeStartU: 40,
     beforeEndU: 41,
@@ -223,7 +237,7 @@ const mockDevices: Device[] = [
     brand: "Dell",
     model: "R740",
     ports: 24,
-    sizeU: 2,
+    sizeU: 1,
     ip: "10.0.1.12",
     serial: "",
     portMap: "",
@@ -342,92 +356,58 @@ const normalizeDevices = (raw: any[]): Device[] => {
   });
 };
 
-const isNoMoveRack = (name: string) => name.startsWith("不搬存放區");
-
 /* -----------------------------
-  Category Colors + Rack Text Color
+  Default colors (Admin adjustable)
 ----------------------------- */
 
-type CatColors = Record<DeviceCategory, string>;
-
-const DEFAULT_CAT_COLORS: CatColors = {
-  Network: "#6f8f7d", // 灰綠
-  Storage: "#6a86a6", // 灰藍
-  Server: "#7a6fa3", // 灰紫
-  Other: "#b58a1a", // 深黃
-};
-
-const loadCatColors = (): CatColors => {
-  const v = readJson<CatColors>(LS.catColors, DEFAULT_CAT_COLORS);
-  return {
-    Network: v.Network || DEFAULT_CAT_COLORS.Network,
-    Storage: v.Storage || DEFAULT_CAT_COLORS.Storage,
-    Server: v.Server || DEFAULT_CAT_COLORS.Server,
-    Other: v.Other || DEFAULT_CAT_COLORS.Other,
-  };
-};
-
-const loadRackTextColor = (): string => {
-  const v = localStorage.getItem(LS.rackTextColor);
-  return v || "#F8FAFC";
+const DEFAULT_COLORS: ColorSettings = {
+  catNetwork: "#8fb3a0",
+  catStorage: "#8fb0d3",
+  catServer: "#a79ad9",
+  catOther: "#e0b83a",
+  rackText: "#f8fafc",
 };
 
 /* -----------------------------
-  Theme Tokens（AI色系）
+  Theme Tokens
 ----------------------------- */
 
 const ThemeTokens = () => {
   const style = useStore((s) => s.themeStyle);
 
   const presets: Record<ThemeStyle, { light: string; dark: string }> = {
+    // ✅ 保留 Neon（你原本的）
     neon: {
       light:
-        ":root{--bg:#f7fafc;--panel:#ffffff;--panel2:#f1f5f9;--text:#0b1220;--muted:#475569;--border:#e2e8f0;--accent:#06b6d4;--accent2:#a855f7;--onColor:#0b1220}",
+        ":root{--bg:#f7fafc;--panel:#ffffff;--panel2:#f1f5f9;--text:#0b1220;--muted:#475569;--border:#e2e8f0;--accent:#06b6d4;--accent2:#a855f7;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
-        "html.dark{--bg:#05070d;--panel:#0b1220;--panel2:#1a2235;--text:#e5e7eb;--muted:#94a3b8;--border:#1e293b;--accent:#22d3ee;--accent2:#c084fc;--onColor:#f8fafc}",
+        "html.dark{--bg:#05070d;--panel:#0b1220;--panel2:#1a2235;--text:#e5e7eb;--muted:#94a3b8;--border:#1e293b;--accent:#22d3ee;--accent2:#c084fc;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
-
-    // ✅ Holo AI：偏霓虹+柔和漸層（時下 AI 產品風）
-    holo: {
+    // ✅ 新：Horizon（AI SaaS 感：藍綠 + 柔紫）
+    horizon: {
       light:
-        ":root{--bg:#f7f8ff;--panel:#ffffff;--panel2:#f2f4ff;--text:#0a0f1e;--muted:#586174;--border:#e6e8ff;--accent:#5b8cff;--accent2:#22c55e;--onColor:#0a0f1e}",
+        ":root{--bg:#f6f9ff;--panel:#ffffff;--panel2:#eef3ff;--text:#0a1020;--muted:#5b6478;--border:#e6ebff;--accent:#2563eb;--accent2:#14b8a6;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
-        "html.dark{--bg:#05061a;--panel:#0b0e25;--panel2:#12163a;--text:#eef2ff;--muted:#aab1cf;--border:#1f265a;--accent:#7aa2ff;--accent2:#34d399;--onColor:#f8fafc}",
+        "html.dark{--bg:#070a14;--panel:#0b1020;--panel2:#101a33;--text:#f1f5f9;--muted:#9aa4b2;--border:#1a2550;--accent:#60a5fa;--accent2:#2dd4bf;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
-
-    // ✅ Glass AI：玻璃擬態、青紫系
-    glass: {
+    // ✅ 新：Nebula（AI 紫粉漸層感）
+    nebula: {
       light:
-        ":root{--bg:#f6fbff;--panel:#ffffff;--panel2:#eef6ff;--text:#071224;--muted:#5b6b85;--border:#dbeafe;--accent:#14b8a6;--accent2:#8b5cf6;--onColor:#071224}",
+        ":root{--bg:#fbf7ff;--panel:#ffffff;--panel2:#f6edff;--text:#140a20;--muted:#6b5b7a;--border:#f0e1ff;--accent:#7c3aed;--accent2:#ec4899;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
-        "html.dark{--bg:#041018;--panel:#081a26;--panel2:#0b2233;--text:#e6f0ff;--muted:#96a9c2;--border:#16324a;--accent:#2dd4bf;--accent2:#a78bfa;--onColor:#f8fafc}",
+        "html.dark{--bg:#080614;--panel:#0f0b1f;--panel2:#1a1233;--text:#f8fafc;--muted:#a7a1b2;--border:#2a1f4d;--accent:#a78bfa;--accent2:#fb7185;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
-
-    // ✅ Midnight AI：深夜黑藍+亮紫粉（AI 控制台常見）
-    midnightAI: {
+    // ✅ 新：Matrix（AI 深色、冷綠點綴）
+    matrix: {
       light:
-        ":root{--bg:#f7f7fb;--panel:#ffffff;--panel2:#eef1ff;--text:#0b1020;--muted:#667085;--border:#e5e7eb;--accent:#7c3aed;--accent2:#ec4899;--onColor:#0b1020}",
+        ":root{--bg:#f7fbf9;--panel:#ffffff;--panel2:#edf7f2;--text:#07140f;--muted:#5a6b63;--border:#dff2e8;--accent:#10b981;--accent2:#06b6d4;--onColor:#07140f;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
-        "html.dark{--bg:#05060d;--panel:#0b0f18;--panel2:#0f172a;--text:#f8fafc;--muted:#a1a1aa;--border:#1f2937;--accent:#a78bfa;--accent2:#fb7185;--onColor:#f8fafc}",
+        "html.dark{--bg:#050c09;--panel:#0a1410;--panel2:#0f1f18;--text:#eafff6;--muted:#9bb7ab;--border:#153026;--accent:#34d399;--accent2:#22d3ee;--onColor:#07140f;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
   };
 
   const css = presets[style] || presets.neon;
-
-  return (
-    <style>
-      {`
-${css.light}
-${css.dark}
-
-/* ✅ 燈號正綠 / 正紅 + 光暈（全站套用） */
-:root{
-  --lampOn: rgb(0,255,0);
-  --lampOff: rgb(255,0,0);
-}
-`}
-    </style>
-  );
+  return <style>{`${css.light}\n${css.dark}`}</style>;
 };
 
 function useApplyTheme() {
@@ -438,16 +418,16 @@ function useApplyTheme() {
 }
 
 /* -----------------------------
-  Lamps
+  Lamps (pure RGB + glow)
 ----------------------------- */
 
 const Lamp = ({ on }: { on: boolean }) => (
   <span
     className="inline-block w-2 h-2 rounded-full"
     style={{
-      backgroundColor: on ? "var(--lampOn)" : "var(--lampOff)",
+      backgroundColor: on ? "rgb(0,255,0)" : "rgb(255,0,0)",
       boxShadow: on
-        ? "0 0 10px rgba(0,255,0,0.8)"
+        ? "0 0 10px rgba(0,255,0,0.85)"
         : "0 0 10px rgba(255,0,0,0.75)",
     }}
   />
@@ -463,11 +443,10 @@ const LampsRow = ({ m }: { m: MigrationFlags }) => (
 );
 
 /* -----------------------------
-  CSV Full Backup / Restore
-  ✅ 包含：資產欄位 + before/after 佈局 + 4 燈
+  CSV Export / Import (Full backup/restore)
 ----------------------------- */
 
-const CSV_HEADERS = [
+const FULL_HEADERS = [
   "id",
   "category",
   "deviceId",
@@ -485,94 +464,23 @@ const CSV_HEADERS = [
   "afterRackId",
   "afterStartU",
   "afterEndU",
-  "mig_racked",
-  "mig_cabled",
-  "mig_powered",
-  "mig_tested",
+  "m_racked",
+  "m_cabled",
+  "m_powered",
+  "m_tested",
+  // settings (repeat per row; import reads from first row)
+  "catNetworkColor",
+  "catStorageColor",
+  "catServerColor",
+  "catOtherColor",
+  "rackTextColor",
 ];
 
-function downloadCSV(devices: Device[]) {
-  const esc = (v: any) => {
-    const s = String(v ?? "");
-    const needs =
-      s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r");
-    return needs ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-
-  const rows = devices.map((d) => [
-    d.id,
-    d.category,
-    d.deviceId,
-    d.name,
-    d.brand,
-    d.model,
-    d.ports,
-    d.sizeU,
-    d.ip ?? "",
-    d.serial ?? "",
-    d.portMap ?? "",
-    d.beforeRackId ?? "",
-    d.beforeStartU ?? "",
-    d.beforeEndU ?? "",
-    d.afterRackId ?? "",
-    d.afterStartU ?? "",
-    d.afterEndU ?? "",
-    d.migration.racked ? 1 : 0,
-    d.migration.cabled ? 1 : 0,
-    d.migration.powered ? 1 : 0,
-    d.migration.tested ? 1 : 0,
-  ]);
-
-  const csv = `${CSV_HEADERS.join(",")}\n${rows
-    .map((r) => r.map(esc).join(","))
-    .join("\n")}`;
-
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `devices_fullbackup_${new Date()
-    .toISOString()
-    .slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function downloadCSVTemplate() {
-  const sample = [
-    CSV_HEADERS.join(","),
-    [
-      "dev-001",
-      "Network",
-      "SW-01",
-      "核心交換機",
-      "Cisco",
-      "C9300",
-      "48",
-      "1",
-      "10.0.0.2",
-      "SN001",
-      "A1/40/Gi1/0/1 -> FW\nA1/40/Gi1/0/2 -> Router",
-      "BEF_01",
-      "40",
-      "40",
-      "AFT_A1",
-      "40",
-      "40",
-      "1",
-      "1",
-      "1",
-      "0",
-    ].join(","),
-  ].join("\n");
-
-  const blob = new Blob([sample], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `devices_fullbackup_template.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+function escCSV(v: any) {
+  const s = String(v ?? "");
+  const needs =
+    s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r");
+  return needs ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 function parseCSV(text: string) {
@@ -622,6 +530,92 @@ function parseCSV(text: string) {
   return rows.filter((r) => r.some((c) => c.trim().length > 0));
 }
 
+function downloadFullCSV(devices: Device[], colors: ColorSettings) {
+  const rows = devices.map((d) => [
+    d.id,
+    d.category,
+    d.deviceId,
+    d.name,
+    d.brand,
+    d.model,
+    d.ports,
+    d.sizeU,
+    d.ip ?? "",
+    d.serial ?? "",
+    d.portMap ?? "",
+    d.beforeRackId ?? "",
+    d.beforeStartU ?? "",
+    d.beforeEndU ?? "",
+    d.afterRackId ?? "",
+    d.afterStartU ?? "",
+    d.afterEndU ?? "",
+    d.migration.racked ? 1 : 0,
+    d.migration.cabled ? 1 : 0,
+    d.migration.powered ? 1 : 0,
+    d.migration.tested ? 1 : 0,
+    colors.catNetwork,
+    colors.catStorage,
+    colors.catServer,
+    colors.catOther,
+    colors.rackText,
+  ]);
+
+  const csv = `${FULL_HEADERS.join(",")}\n${rows
+    .map((r) => r.map(escCSV).join(","))
+    .join("\n")}`;
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `migratepro_full_${new Date()
+    .toISOString()
+    .slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadFullCSVTemplate() {
+  const templateRow = [
+    "dev-001",
+    "Network",
+    "SW-01",
+    "核心交換機",
+    "Cisco",
+    "C9300",
+    "48",
+    "1",
+    "10.0.0.2",
+    "SN001",
+    "01/40U | Gi1/0/1 -> FW\n01/40U | Gi1/0/2 -> Core-RTR",
+    "BEF_01",
+    "40",
+    "40",
+    "AFT_A1",
+    "20",
+    "20",
+    "1",
+    "1",
+    "0",
+    "0",
+    "#8fb3a0",
+    "#8fb0d3",
+    "#a79ad9",
+    "#e0b83a",
+    "#f8fafc",
+  ];
+  const csv = `${FULL_HEADERS.join(",")}\n${templateRow
+    .map(escCSV)
+    .join(",")}\n`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `migratepro_full_template.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /* -----------------------------
   Store
 ----------------------------- */
@@ -630,17 +624,15 @@ interface Store {
   beforeRacks: Rack[];
   afterRacks: Rack[];
   devices: Device[];
+
   theme: ThemeMode;
   themeStyle: ThemeStyle;
   page: PageKey;
   selectedDeviceId: string | null;
   ui: UiState;
 
-  // colors
-  catColors: CatColors;
-  rackTextColor: string;
-  setCatColor: (cat: DeviceCategory, hex: string) => void;
-  setRackTextColor: (hex: string) => void;
+  colors: ColorSettings;
+  setColors: (patch: Partial<ColorSettings>) => void;
 
   // accounts
   accounts: Account[];
@@ -661,11 +653,11 @@ interface Store {
   setSelectedDeviceId: (id: string | null) => void;
   setUi: (patch: Partial<UiState>) => void;
 
-  addDevice: (draft: DeviceDraft) => string; // returns id
+  addDevice: (draft: DeviceDraft) => string; // returns new id
   updateDevice: (id: string, patch: Partial<DeviceDraft>) => void;
   deleteDeviceById: (id: string) => void;
 
-  importDevicesFromCSV: (devices: Device[]) => void;
+  importFullCSV: (fileText: string) => { ok: boolean; message?: string };
 
   clearPlacement: (mode: PlacementMode, id: string) => void;
   place: (
@@ -696,9 +688,9 @@ function loadAccounts(): Account[] {
   const hasAdmin = valid.some((a) => a.username === "admin");
   const patched = hasAdmin
     ? valid
-    : [{ username: "admin", password: "migration123", role: "admin" as Role }, ...valid];
+    : [{ username: "admin", password: "migration123", role: "admin" }, ...valid];
   const fixedAdmin = patched.map((a) =>
-    a.username === "admin" ? { ...a, role: "admin" as Role } : a
+    a.username === "admin" ? { ...a, role: "admin" } : a
   );
   writeJson(LS.accounts, fixedAdmin);
   return fixedAdmin;
@@ -715,18 +707,16 @@ const useStore = create<Store>((set, get) => ({
   selectedDeviceId: null,
   ui: { ...DEFAULT_UI, ...readJson<UiState>(LS.ui, DEFAULT_UI) },
 
-  catColors: loadCatColors(),
-  rackTextColor: loadRackTextColor(),
-  setCatColor: (cat, hex) =>
+  colors: (() => {
+    const stored = readJson<ColorSettings>(LS.colors, DEFAULT_COLORS);
+    return { ...DEFAULT_COLORS, ...stored };
+  })(),
+
+  setColors: (patch) =>
     set((s) => {
-      const next = { ...s.catColors, [cat]: hex };
-      writeJson(LS.catColors, next);
-      return { catColors: next };
-    }),
-  setRackTextColor: (hex) =>
-    set(() => {
-      localStorage.setItem(LS.rackTextColor, hex);
-      return { rackTextColor: hex };
+      const next = { ...s.colors, ...patch };
+      writeJson(LS.colors, next);
+      return { colors: next };
     }),
 
   accounts: loadAccounts(),
@@ -763,7 +753,7 @@ const useStore = create<Store>((set, get) => ({
   role: (() => {
     const u = localStorage.getItem(LS.user);
     if (u === "admin") return "admin" as Role;
-    const accounts = readJson<Account[]>(LS.accounts, DEFAULT_ACCOUNTS);
+    const accounts = loadAccounts();
     const found = accounts.find((a) => a.username === u);
     return found?.role ?? ("vendor" as Role);
   })(),
@@ -771,9 +761,7 @@ const useStore = create<Store>((set, get) => ({
   login: (u, p) => {
     const username = u.trim();
     const accounts = get().accounts;
-    const found = accounts.find(
-      (a) => a.username === username && a.password === p
-    );
+    const found = accounts.find((a) => a.username === username && a.password === p);
     if (!found) return { ok: false, message: "帳號或密碼錯誤" };
     localStorage.setItem(LS.auth, "1");
     localStorage.setItem(LS.user, username);
@@ -841,9 +829,7 @@ const useStore = create<Store>((set, get) => ({
 
   updateDevice: (id, patch) =>
     set((s) => {
-      const next = s.devices.map((d) =>
-        d.id === id ? ({ ...d, ...patch } as Device) : d
-      );
+      const next = s.devices.map((d) => (d.id === id ? ({ ...d, ...patch } as Device) : d));
       writeJson(LS.devices, next);
       return { devices: next };
     }),
@@ -852,18 +838,78 @@ const useStore = create<Store>((set, get) => ({
     set((s) => {
       const next = s.devices.filter((d) => d.id !== id);
       writeJson(LS.devices, next);
-      return {
-        devices: next,
-        selectedDeviceId: s.selectedDeviceId === id ? null : s.selectedDeviceId,
-      };
+      return { devices: next, selectedDeviceId: s.selectedDeviceId === id ? null : s.selectedDeviceId };
     }),
 
-  importDevicesFromCSV: (devices) =>
-    set(() => {
-      const normalized = normalizeDevices(devices as any);
-      writeJson(LS.devices, normalized);
-      return { devices: normalized, selectedDeviceId: null };
-    }),
+  importFullCSV: (fileText) => {
+    try {
+      const rows = parseCSV(fileText);
+      if (rows.length < 2) return { ok: false, message: "CSV 內容不足" };
+      const header = rows[0].map((x) => x.trim());
+      const idx = (k: string) => header.findIndex((h) => h === k);
+
+      for (const k of FULL_HEADERS) {
+        if (idx(k) === -1) return { ok: false, message: `CSV 缺少欄位：${k}` };
+      }
+
+      const get = (r: string[], k: string) => String(r[idx(k)] ?? "").trim();
+
+      // read settings from first data row
+      const first = rows[1];
+      const nextColors: ColorSettings = {
+        catNetwork: get(first, "catNetworkColor") || DEFAULT_COLORS.catNetwork,
+        catStorage: get(first, "catStorageColor") || DEFAULT_COLORS.catStorage,
+        catServer: get(first, "catServerColor") || DEFAULT_COLORS.catServer,
+        catOther: get(first, "catOtherColor") || DEFAULT_COLORS.catOther,
+        rackText: get(first, "rackTextColor") || DEFAULT_COLORS.rackText,
+      };
+
+      const devices: Device[] = rows.slice(1).map((r) => {
+        const sizeU = Math.max(1, Math.min(42, Number(get(r, "sizeU") || 1)));
+        const beforeRackId = get(r, "beforeRackId") || undefined;
+        const afterRackId = get(r, "afterRackId") || undefined;
+
+        const beforeStartU = get(r, "beforeStartU");
+        const beforeEndU = get(r, "beforeEndU");
+        const afterStartU = get(r, "afterStartU");
+        const afterEndU = get(r, "afterEndU");
+
+        return {
+          id: get(r, "id") || crypto.randomUUID(),
+          category: (get(r, "category") as DeviceCategory) || "Other",
+          deviceId: get(r, "deviceId"),
+          name: get(r, "name"),
+          brand: get(r, "brand"),
+          model: get(r, "model"),
+          ports: Number(get(r, "ports") || 0),
+          sizeU,
+          ip: get(r, "ip") || "",
+          serial: get(r, "serial") || "",
+          portMap: get(r, "portMap") || "",
+          beforeRackId: beforeRackId ? (isProbablyOldRackId(beforeRackId) ? toBeforeRackId(beforeRackId) : beforeRackId) : undefined,
+          beforeStartU: beforeStartU ? Number(beforeStartU) : undefined,
+          beforeEndU: beforeEndU ? Number(beforeEndU) : undefined,
+          afterRackId: afterRackId ? (isProbablyOldRackId(afterRackId) ? toAfterRackId(afterRackId) : afterRackId) : undefined,
+          afterStartU: afterStartU ? Number(afterStartU) : undefined,
+          afterEndU: afterEndU ? Number(afterEndU) : undefined,
+          migration: {
+            racked: get(r, "m_racked") === "1",
+            cabled: get(r, "m_cabled") === "1",
+            powered: get(r, "m_powered") === "1",
+            tested: get(r, "m_tested") === "1",
+          },
+        };
+      });
+
+      writeJson(LS.devices, devices);
+      writeJson(LS.colors, nextColors);
+      set({ devices, colors: nextColors });
+
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, message: e?.message || "匯入失敗" };
+    }
+  },
 
   clearPlacement: (mode, id) =>
     set((s) => {
@@ -937,16 +983,24 @@ const useStore = create<Store>((set, get) => ({
 }));
 
 /* -----------------------------
-  Color helpers
+  Colors helpers
 ----------------------------- */
 
-const catColorVar = (cat: DeviceCategory) => {
-  const c = useStore.getState().catColors[cat];
-  return c;
+const catColorVar = (cat: DeviceCategory, colors: ColorSettings) => {
+  switch (cat) {
+    case "Network":
+      return colors.catNetwork;
+    case "Storage":
+      return colors.catStorage;
+    case "Server":
+      return colors.catServer;
+    default:
+      return colors.catOther;
+  }
 };
 
 /* -----------------------------
-  Login Page
+  Login Page (MigratePro + same vibe)
 ----------------------------- */
 
 function LoginPage() {
@@ -970,8 +1024,8 @@ function LoginPage() {
             <Server size={18} />
           </div>
           <div>
-            <div className="text-lg font-black">SET機房搬遷專案管理</div>
-            <div className="text-xs text-[var(--muted)]">登入後開始管理搬遷進度</div>
+            <div className="text-lg font-black">MigratePro</div>
+            <div className="text-xs text-[var(--muted)]">機房搬遷專案管理</div>
           </div>
         </div>
 
@@ -1037,7 +1091,7 @@ function Switch({
         disabled ? "opacity-50 cursor-not-allowed" : ""
       } ${
         on
-          ? "bg-[var(--lampOn)]/15 border-[var(--lampOn)]"
+          ? "bg-[rgba(0,255,0,0.12)] border-[rgba(0,255,0,0.7)]"
           : "bg-black/20 border-[var(--border)]"
       }`}
       style={{
@@ -1092,12 +1146,12 @@ function DeviceDetailModal({
       >
         <div className="p-6">
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <div className="text-xs text-[var(--muted)]">設備詳細</div>
-              <div className="text-lg font-black">
+              <div className="text-lg font-black truncate">
                 {d.deviceId} · {d.name}
               </div>
-              <div className="text-sm text-[var(--muted)]">
+              <div className="text-sm text-[var(--muted)] truncate">
                 {d.brand} / {d.model} · {d.ports} ports · {d.sizeU}U
               </div>
             </div>
@@ -1122,9 +1176,9 @@ function DeviceDetailModal({
                 {d.ip || "-"} / {d.serial || "-"}
               </div>
               <div className="text-xs text-[var(--muted)] mt-2">Port對接備註</div>
-              <pre className="mt-1 whitespace-pre-wrap text-xs text-[var(--text)]/90">
+              <div className="mt-1 whitespace-pre-wrap break-words">
                 {d.portMap || "-"}
-              </pre>
+              </div>
             </div>
           </div>
 
@@ -1140,9 +1194,7 @@ function DeviceDetailModal({
                   <div className="text-sm">已上架</div>
                   <Switch
                     on={d.migration.racked}
-                    onChange={(v) =>
-                      canToggleFlags(role) && setFlag(d.id, { racked: v })
-                    }
+                    onChange={(v) => canToggleFlags(role) && setFlag(d.id, { racked: v })}
                     disabled={!canToggleFlags(role)}
                   />
                 </div>
@@ -1150,9 +1202,7 @@ function DeviceDetailModal({
                   <div className="text-sm">已接線</div>
                   <Switch
                     on={d.migration.cabled}
-                    onChange={(v) =>
-                      canToggleFlags(role) && setFlag(d.id, { cabled: v })
-                    }
+                    onChange={(v) => canToggleFlags(role) && setFlag(d.id, { cabled: v })}
                     disabled={!canToggleFlags(role)}
                   />
                 </div>
@@ -1160,9 +1210,7 @@ function DeviceDetailModal({
                   <div className="text-sm">已開機</div>
                   <Switch
                     on={d.migration.powered}
-                    onChange={(v) =>
-                      canToggleFlags(role) && setFlag(d.id, { powered: v })
-                    }
+                    onChange={(v) => canToggleFlags(role) && setFlag(d.id, { powered: v })}
                     disabled={!canToggleFlags(role)}
                   />
                 </div>
@@ -1170,9 +1218,7 @@ function DeviceDetailModal({
                   <div className="text-sm">已測試</div>
                   <Switch
                     on={d.migration.tested}
-                    onChange={(v) =>
-                      canToggleFlags(role) && setFlag(d.id, { tested: v })
-                    }
+                    onChange={(v) => canToggleFlags(role) && setFlag(d.id, { tested: v })}
                     disabled={!canToggleFlags(role)}
                   />
                 </div>
@@ -1188,8 +1234,7 @@ function DeviceDetailModal({
             {allowLayout ? (
               <button
                 onClick={() => {
-                  if (confirm("確定清除此設備在本頁面的位置？"))
-                    clearPlacement(mode, d.id);
+                  if (confirm("確定清除此設備在本頁面的位置？")) clearPlacement(mode, d.id);
                   onClose();
                 }}
                 className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5"
@@ -1217,13 +1262,8 @@ function DeviceDetailModal({
 
 /* -----------------------------
   Device Modal（新增/編輯）
-  ✅ Port對接備註：多行，最多48行
+  - Port對接備註：多行（最多48行）
 ----------------------------- */
-
-function limitLines(text: string, maxLines: number) {
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
-  return lines.slice(0, maxLines).join("\n");
-}
 
 function DeviceModal({
   title,
@@ -1242,7 +1282,7 @@ function DeviceModal({
   const input = (k: keyof DeviceDraft) => (e: any) =>
     setD((p) => ({ ...p, [k]: e.target.value } as any));
 
-  const portMapLines = (d.portMap || "").replace(/\r\n/g, "\n").split("\n").filter((l) => l.length > 0).length;
+  const portLines = (d.portMap ?? "").split(/\r?\n/);
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -1254,11 +1294,7 @@ function DeviceModal({
         <div className="p-6">
           <div className="flex items-center justify-between gap-3">
             <div className="text-xl font-black text-[var(--text)]">{title}</div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl hover:bg-white/5"
-              aria-label="close"
-            >
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5" aria-label="close">
               <X />
             </button>
           </div>
@@ -1269,11 +1305,15 @@ function DeviceModal({
               e.preventDefault();
               if (!d.deviceId.trim() || !d.name.trim())
                 return alert("請填寫設備編號與設備名稱");
+
+              const lines = (d.portMap ?? "").split(/\r?\n/);
+              if (lines.length > 48) return alert("Port對接備註最多 48 行");
+
               onSave({
                 ...d,
                 ports: Number(d.ports) || 0,
                 sizeU: Math.max(1, Math.min(42, Number(d.sizeU) || 1)),
-                portMap: limitLines(d.portMap || "", 48),
+                portMap: (d.portMap ?? "").trimEnd(),
               });
             }}
           >
@@ -1284,13 +1324,11 @@ function DeviceModal({
                 value={d.category}
                 onChange={input("category") as any}
               >
-                {(["Network", "Storage", "Server", "Other"] as DeviceCategory[]).map(
-                  (x) => (
-                    <option key={x} value={x}>
-                      {x}
-                    </option>
-                  )
-                )}
+                {(["Network", "Storage", "Server", "Other"] as DeviceCategory[]).map((x) => (
+                  <option key={x} value={x}>
+                    {x}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -1336,9 +1374,7 @@ function DeviceModal({
               <select
                 className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none"
                 value={String(d.ports)}
-                onChange={(e) =>
-                  setD((p) => ({ ...p, ports: Number(e.target.value) }))
-                }
+                onChange={(e) => setD((p) => ({ ...p, ports: Number(e.target.value) }))}
               >
                 {portsOptions.map((p) => (
                   <option key={p} value={p}>
@@ -1356,9 +1392,7 @@ function DeviceModal({
                 max={42}
                 className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none"
                 value={d.sizeU}
-                onChange={(e) =>
-                  setD((p) => ({ ...p, sizeU: Number(e.target.value) || 1 }))
-                }
+                onChange={(e) => setD((p) => ({ ...p, sizeU: Number(e.target.value) || 1 }))}
               />
             </div>
 
@@ -1384,227 +1418,35 @@ function DeviceModal({
             <div className="md:col-span-2">
               <div className="flex items-end justify-between gap-3">
                 <label className="text-xs text-[var(--muted)]">
-                  Port對接備註（格式：櫃/U/Port，每行一筆，最多 48 行）
+                  Port對接備註（格式建議：櫃/U/Port）
                 </label>
                 <div className="text-[11px] text-[var(--muted)]">
-                  行數：{Math.min(portMapLines, 48)}/48
+                  行數：{portLines.filter((x) => x.trim().length > 0).length}/48
                 </div>
               </div>
+
               <textarea
-                className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none min-h-[220px] whitespace-pre-wrap"
+                className="mt-1 w-full bg-[var(--panel2)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm outline-none min-h-[140px] whitespace-pre"
                 value={d.portMap ?? ""}
-                onChange={(e) =>
-                  setD((p) => ({ ...p, portMap: limitLines(e.target.value, 48) }))
-                }
-                placeholder={"A1/40/Gi1/0/1 -> FW\nA1/40/Gi1/0/2 -> Router"}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  const lines = next.split(/\r?\n/);
+                  if (lines.length > 48) return; // hard cap
+                  setD((p) => ({ ...p, portMap: next }));
+                }}
+                placeholder={"例：\n01/40U | Gi1/0/1 -> FW\nA1/20U | ETH1 -> TOR"}
               />
             </div>
 
             <div className="md:col-span-2 flex justify-end gap-3 mt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5"
-              >
+              <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5">
                 取消
               </button>
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-xl bg-[var(--accent)] text-black font-extrabold hover:opacity-90"
-              >
+              <button type="submit" className="px-4 py-2 rounded-xl bg-[var(--accent)] text-black font-extrabold hover:opacity-90">
                 儲存
               </button>
             </div>
           </form>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-/* -----------------------------
-  Admin Add+Place Modal
------------------------------ */
-
-function AddAndPlaceModal({
-  mode,
-  rackId,
-  startU,
-  onClose,
-}: {
-  mode: PlacementMode;
-  rackId: string;
-  startU: number;
-  onClose: () => void;
-}) {
-  const addDevice = useStore((s) => s.addDevice);
-  const place = useStore((s) => s.place);
-
-  return (
-    <DeviceModal
-      title={`新增設備並放置（${mode === "before" ? "搬遷前" : "搬遷後"}：${rackId.replace(
-        mode === "before" ? /^BEF_/ : /^AFT_/,
-        ""
-      )} U${startU}）`}
-      initial={{
-        category: "Other",
-        deviceId: "",
-        name: "",
-        brand: "",
-        model: "",
-        ports: 8,
-        sizeU: 1,
-        ip: "",
-        serial: "",
-        portMap: "",
-      }}
-      onClose={onClose}
-      onSave={(draft) => {
-        const id = addDevice(draft);
-        const res = place(mode, id, rackId, startU);
-        if (!res.ok) alert(res.message || "放置失敗");
-        onClose();
-      }}
-    />
-  );
-}
-
-/* -----------------------------
-  CSV Import Modal（Admin only）
------------------------------ */
-
-function CSVImportModal({ onClose }: { onClose: () => void }) {
-  const importDevicesFromCSV = useStore((s) => s.importDevicesFromCSV);
-  const [drag, setDrag] = useState(false);
-
-  const handleFile = async (file: File) => {
-    const text = await file.text();
-    const rows = parseCSV(text);
-    if (rows.length < 2) return alert("CSV 內容不足，至少需要標題列 + 一筆資料");
-
-    const header = rows[0].map((x) => x.trim());
-    const idx = (k: string) => header.findIndex((h) => h === k);
-
-    for (const k of CSV_HEADERS) {
-      if (idx(k) === -1)
-        return alert(`CSV 缺少欄位：${k}\n請用「下載範本」產生的格式。`);
-    }
-
-    const devices: Device[] = rows.slice(1).map((r) => {
-      const get = (k: string) => (idx(k) >= 0 ? String(r[idx(k)] ?? "").trim() : "");
-      const num = (k: string) => {
-        const v = get(k);
-        return v === "" ? undefined : Number(v);
-      };
-      const b = (k: string) => {
-        const v = get(k);
-        return v === "1" || v.toLowerCase() === "true";
-      };
-
-      const category = (get("category") as DeviceCategory) || "Other";
-      return {
-        id: get("id") || crypto.randomUUID(),
-        category: (["Network", "Storage", "Server", "Other"].includes(category)
-          ? category
-          : "Other") as DeviceCategory,
-        deviceId: get("deviceId"),
-        name: get("name"),
-        brand: get("brand"),
-        model: get("model"),
-        ports: Number(get("ports") || 0),
-        sizeU: Math.max(1, Math.min(42, Number(get("sizeU") || 1))),
-        ip: get("ip") || "",
-        serial: get("serial") || "",
-        portMap: get("portMap") || "",
-
-        beforeRackId: get("beforeRackId") || undefined,
-        beforeStartU: num("beforeStartU"),
-        beforeEndU: num("beforeEndU"),
-
-        afterRackId: get("afterRackId") || undefined,
-        afterStartU: num("afterStartU"),
-        afterEndU: num("afterEndU"),
-
-        migration: {
-          racked: b("mig_racked"),
-          cabled: b("mig_cabled"),
-          powered: b("mig_powered"),
-          tested: b("mig_tested"),
-        },
-      } as Device;
-    });
-
-    importDevicesFromCSV(devices);
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-      <motion.div
-        initial={{ scale: 0.96, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl"
-      >
-        <div className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="text-xl font-black">CSV 匯入（完整還原）</div>
-            <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5">
-              <X />
-            </button>
-          </div>
-
-          <div className="mt-3 text-sm text-[var(--muted)]">
-            支援完整備份/還原：資產 + 佈局 + 燈號狀態。匯入會覆蓋目前資料。
-          </div>
-
-          <div className="mt-4 flex gap-2">
-            <button
-              onClick={downloadCSVTemplate}
-              className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2"
-            >
-              <Download size={16} /> 下載範本
-            </button>
-          </div>
-
-          <label
-            onDragEnter={() => setDrag(true)}
-            onDragLeave={() => setDrag(false)}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDrag(false);
-              const file = e.dataTransfer.files?.[0];
-              if (file) handleFile(file);
-            }}
-            className={`mt-4 block w-full rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-all ${
-              drag
-                ? "border-[var(--accent)] bg-white/5"
-                : "border-[var(--border)] bg-black/10"
-            }`}
-          >
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
-            <div className="flex flex-col items-center gap-3">
-              <div
-                className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                style={{
-                  background:
-                    "linear-gradient(135deg,var(--accent),var(--accent2))",
-                }}
-              >
-                <Upload className="text-black" />
-              </div>
-              <div className="font-black">拖曳 CSV 到這裡上傳</div>
-              <div className="text-xs text-[var(--muted)]">或點擊選取檔案</div>
-            </div>
-          </label>
         </div>
       </motion.div>
     </div>
@@ -1617,32 +1459,17 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
 
 const Dashboard = () => {
   const devices = useStore((s) => s.devices);
+  const colors = useStore((s) => s.colors);
 
   const racked = devices.filter((d) => d.migration.racked).length;
   const completed = devices.filter((d) => isMigratedComplete(d.migration)).length;
   const pending = Math.max(0, devices.length - completed);
 
   const chartData = [
-    {
-      name: "Network",
-      count: devices.filter((d) => d.category === "Network").length,
-      fill: useStore.getState().catColors.Network,
-    },
-    {
-      name: "Storage",
-      count: devices.filter((d) => d.category === "Storage").length,
-      fill: useStore.getState().catColors.Storage,
-    },
-    {
-      name: "Server",
-      count: devices.filter((d) => d.category === "Server").length,
-      fill: useStore.getState().catColors.Server,
-    },
-    {
-      name: "Other",
-      count: devices.filter((d) => d.category === "Other").length,
-      fill: useStore.getState().catColors.Other,
-    },
+    { name: "Network", count: devices.filter((d) => d.category === "Network").length, fill: colors.catNetwork },
+    { name: "Storage", count: devices.filter((d) => d.category === "Storage").length, fill: colors.catStorage },
+    { name: "Server", count: devices.filter((d) => d.category === "Server").length, fill: colors.catServer },
+    { name: "Other", count: devices.filter((d) => d.category === "Other").length, fill: colors.catOther },
   ];
 
   const stats = [
@@ -1671,10 +1498,16 @@ const Dashboard = () => {
               style={{
                 color:
                   s.tone === "green"
-                    ? "var(--lampOn)"
+                    ? "rgb(0,255,0)"
                     : s.tone === "red"
-                    ? "var(--lampOff)"
+                    ? "rgb(255,0,0)"
                     : "var(--accent)",
+                textShadow:
+                  s.tone === "green"
+                    ? "0 0 18px rgba(0,255,0,0.25)"
+                    : s.tone === "red"
+                    ? "0 0 18px rgba(255,0,0,0.2)"
+                    : "none",
               }}
             >
               {s.value}
@@ -1711,10 +1544,10 @@ const Dashboard = () => {
         <div className="bg-[var(--panel)] border border-[var(--border)] p-6 rounded-2xl">
           <h3 className="text-lg font-black mb-4">操作提示</h3>
           <ul className="text-sm text-[var(--muted)] space-y-2">
-            <li>1) 到「設備管理」新增/維護設備清單。</li>
+            <li>1) 到「設備管理」管理設備。</li>
             <li>2) 在「搬遷前/後」把設備拖到機櫃；已放置設備也可拖曳調整位置（含 U 重疊檢查）。</li>
             <li>3) 點機櫃內設備可看詳細；在「搬遷後」可即時切換 4 個狀態燈。</li>
-            <li>4) 「CSV 匯出」為完整備份（含佈局/燈號），可用「CSV 匯入」完整還原。</li>
+            <li>4) 建議定期用「完整 CSV」做備份/還原。</li>
           </ul>
         </div>
       </div>
@@ -1723,7 +1556,90 @@ const Dashboard = () => {
 };
 
 /* -----------------------------
-  Devices Page（排序 + 完成欄）
+  CSV Import Modal (Full)
+----------------------------- */
+
+function FullCSVImportModal({ onClose }: { onClose: () => void }) {
+  const importFullCSV = useStore((s) => s.importFullCSV);
+  const [drag, setDrag] = useState(false);
+
+  const handleFile = async (file: File) => {
+    const text = await file.text();
+    const res = importFullCSV(text);
+    if (!res.ok) alert(res.message || "匯入失敗");
+    else onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ scale: 0.96, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="w-full max-w-xl rounded-3xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl"
+      >
+        <div className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="text-xl font-black">完整 CSV 還原（含佈局/燈號/顏色）</div>
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5">
+              <X />
+            </button>
+          </div>
+
+          <div className="mt-3 text-sm text-[var(--muted)]">
+            拖曳 CSV 到下方區域，或點擊選取檔案。此功能會以 CSV 內容覆蓋現有資料。
+          </div>
+
+          <div className="mt-4 flex gap-2 flex-wrap">
+            <button
+              onClick={downloadFullCSVTemplate}
+              className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2"
+            >
+              <Download size={16} /> 下載完整範本
+            </button>
+          </div>
+
+          <label
+            onDragEnter={() => setDrag(true)}
+            onDragLeave={() => setDrag(false)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDrag(false);
+              const file = e.dataTransfer.files?.[0];
+              if (file) handleFile(file);
+            }}
+            className={`mt-4 block w-full rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-all ${
+              drag ? "border-[var(--accent)] bg-white/5" : "border-[var(--border)] bg-black/10"
+            }`}
+          >
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
+              }}
+            />
+            <div className="flex flex-col items-center gap-3">
+              <div
+                className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                style={{ background: "linear-gradient(135deg,var(--accent),var(--accent2))" }}
+              >
+                <Upload className="text-black" />
+              </div>
+              <div className="font-black">拖曳完整 CSV 到這裡上傳</div>
+              <div className="text-xs text-[var(--muted)]">或點擊選取檔案</div>
+            </div>
+          </label>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+/* -----------------------------
+  Devices Page (sorting + completion + no wrap)
 ----------------------------- */
 
 type SortKey =
@@ -1736,18 +1652,14 @@ type SortKey =
   | "sizeU"
   | "before"
   | "after"
+  | "migration"
   | "complete";
 
-function compare(a: any, b: any) {
-  if (a == null && b == null) return 0;
-  if (a == null) return -1;
-  if (b == null) return 1;
-  if (typeof a === "number" && typeof b === "number") return a - b;
-  return String(a).localeCompare(String(b), undefined, { numeric: true });
-}
+type SortDir = "asc" | "desc";
 
 const DevicesPage = () => {
   const devices = useStore((s) => s.devices);
+  const colors = useStore((s) => s.colors);
   const addDevice = useStore((s) => s.addDevice);
   const updateDevice = useStore((s) => s.updateDevice);
   const deleteDeviceById = useStore((s) => s.deleteDeviceById);
@@ -1758,84 +1670,129 @@ const DevicesPage = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [editing, setEditing] = useState<Device | null>(null);
   const [importOpen, setImportOpen] = useState(false);
-
   const [sortKey, setSortKey] = useState<SortKey>("deviceId");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const allowManage = canManageAssets(role);
 
-  const sorted = useMemo(() => {
-    const mapBefore = (d: Device) =>
-      d.beforeRackId && d.beforeStartU != null
-        ? `${d.beforeRackId.replace(/^BEF_/, "")}-${d.beforeStartU}-${d.beforeEndU}`
-        : "";
-    const mapAfter = (d: Device) =>
-      d.afterRackId && d.afterStartU != null
-        ? `${d.afterRackId.replace(/^AFT_/, "")}-${d.afterStartU}-${d.afterEndU}`
-        : "";
+  const sortToggle = (k: SortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(k);
+      setSortDir("asc");
+    }
+  };
 
-    const get = (d: Device) => {
-      switch (sortKey) {
-        case "category":
-          return d.category;
-        case "deviceId":
-          return d.deviceId;
-        case "name":
-          return d.name;
-        case "brand":
-          return d.brand;
-        case "model":
-          return d.model;
-        case "ports":
-          return d.ports;
-        case "sizeU":
-          return d.sizeU;
-        case "before":
-          return mapBefore(d);
-        case "after":
-          return mapAfter(d);
-        case "complete":
-          return isMigratedComplete(d.migration) ? 1 : 0;
-        default:
-          return d.deviceId;
-      }
+  const sorted = useMemo(() => {
+    const getBefore = (d: Device) =>
+      d.beforeRackId && d.beforeStartU != null ? `${d.beforeRackId.replace(/^BEF_/, "")}-${d.beforeStartU}` : "";
+    const getAfter = (d: Device) =>
+      d.afterRackId && d.afterStartU != null ? `${d.afterRackId.replace(/^AFT_/, "")}-${d.afterStartU}` : "";
+    const getMigScore = (d: Device) =>
+      (d.migration.racked ? 1 : 0) +
+      (d.migration.cabled ? 1 : 0) +
+      (d.migration.powered ? 1 : 0) +
+      (d.migration.tested ? 1 : 0);
+    const getComplete = (d: Device) => (isMigratedComplete(d.migration) ? 1 : 0);
+
+    const cmp = (a: any, b: any) => {
+      if (a === b) return 0;
+      if (a == null) return -1;
+      if (b == null) return 1;
+      if (typeof a === "number" && typeof b === "number") return a - b;
+      return String(a).localeCompare(String(b));
     };
 
-    const arr = devices.slice().sort((a, b) => {
-      const c = compare(get(a), get(b));
+    const arr = [...devices].sort((a, b) => {
+      let va: any;
+      let vb: any;
+      switch (sortKey) {
+        case "category":
+          va = a.category;
+          vb = b.category;
+          break;
+        case "deviceId":
+          va = a.deviceId;
+          vb = b.deviceId;
+          break;
+        case "name":
+          va = a.name;
+          vb = b.name;
+          break;
+        case "brand":
+          va = a.brand;
+          vb = b.brand;
+          break;
+        case "model":
+          va = a.model;
+          vb = b.model;
+          break;
+        case "ports":
+          va = a.ports;
+          vb = b.ports;
+          break;
+        case "sizeU":
+          va = a.sizeU;
+          vb = b.sizeU;
+          break;
+        case "before":
+          va = getBefore(a);
+          vb = getBefore(b);
+          break;
+        case "after":
+          va = getAfter(a);
+          vb = getAfter(b);
+          break;
+        case "migration":
+          va = getMigScore(a);
+          vb = getMigScore(b);
+          break;
+        case "complete":
+          va = getComplete(a);
+          vb = getComplete(b);
+          break;
+        default:
+          va = a.deviceId;
+          vb = b.deviceId;
+      }
+      const c = cmp(va, vb);
       return sortDir === "asc" ? c : -c;
     });
     return arr;
   }, [devices, sortKey, sortDir]);
 
-  const HeaderBtn = ({ k, label }: { k: SortKey; label: string }) => (
-    <button
-      onClick={() => {
-        if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-        else {
-          setSortKey(k);
-          setSortDir("asc");
-        }
-      }}
-      className="inline-flex items-center gap-2 hover:text-[var(--accent)]"
-      title="點擊排序"
-    >
-      {label}
-      <ArrowUpDown size={14} className="opacity-70" />
-    </button>
+  const Th = ({
+    k,
+    children,
+    right,
+  }: {
+    k: SortKey;
+    children: React.ReactNode;
+    right?: boolean;
+  }) => (
+    <th className={`px-4 py-4 font-semibold ${right ? "text-right" : ""}`}>
+      <button
+        onClick={() => sortToggle(k)}
+        className="inline-flex items-center gap-2 hover:text-[var(--accent)] whitespace-nowrap"
+        title="排序"
+      >
+        {children}
+        <span className="text-[10px] opacity-70">
+          {sortKey === k ? (sortDir === "asc" ? "▲" : "▼") : ""}
+        </span>
+      </button>
+    </th>
   );
 
   return (
     <div className="p-6">
       <div className="flex flex-wrap gap-3 justify-between items-end mb-6">
         <div>
-          <h2 className="text-2xl font-black text-[var(--accent)]">
-            設備資產清單
-          </h2>
+          <h2 className="text-2xl font-black text-[var(--accent)]">設備資產清單</h2>
           <p className="text-[var(--muted)] text-sm">
             {allowManage
               ? "新增/編輯/刪除設備；刪除會同步移除搬遷前與搬遷後機櫃配置。"
-              : "你目前為 Vendor 權限：可查看、可匯出 CSV、可切換搬遷後燈號，但不能調整機櫃佈局/新增/刪除/匯入。"}
+              : "你目前為 Vendor 權限：可查看、可匯出完整 CSV、可切換搬遷後燈號，但不能調整機櫃佈局/新增/刪除/匯入/修改顏色。"}
           </p>
         </div>
 
@@ -1845,15 +1802,15 @@ const DevicesPage = () => {
               onClick={() => setImportOpen(true)}
               className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2"
             >
-              <Upload size={16} /> CSV 匯入（完整還原）
+              <Upload size={16} /> 完整CSV還原
             </button>
           )}
 
           <button
-            onClick={() => canExportCSV(role) && downloadCSV(devices)}
+            onClick={() => canExportCSV(role) && downloadFullCSV(devices, colors)}
             className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2"
           >
-            <Download size={16} /> CSV 匯出（完整備份）
+            <Download size={16} /> 完整CSV備份
           </button>
 
           {allowManage && (
@@ -1871,48 +1828,18 @@ const DevicesPage = () => {
         <table className="w-full text-left">
           <thead className="bg-black/20 text-[var(--muted)] text-xs uppercase tracking-wider">
             <tr>
-              <th className="px-6 py-4 font-semibold">
-                <HeaderBtn k="category" label="分類" />
-              </th>
-
-              {/* ✅ 拆開：編號 / 名稱 */}
-              <th className="px-6 py-4 font-semibold">
-                <HeaderBtn k="deviceId" label="編號" />
-              </th>
-              <th className="px-6 py-4 font-semibold">
-                <HeaderBtn k="name" label="名稱" />
-              </th>
-
-              <th className="px-6 py-4 font-semibold">
-                <HeaderBtn k="brand" label="廠牌" />
-              </th>
-              <th className="px-6 py-4 font-semibold">
-                <HeaderBtn k="model" label="型號" />
-              </th>
-
-              <th className="px-6 py-4 font-semibold">
-                <HeaderBtn k="ports" label="Ports" />
-              </th>
-              <th className="px-6 py-4 font-semibold">
-                <HeaderBtn k="sizeU" label="U" />
-              </th>
-
-              <th className="px-6 py-4 font-semibold">
-                <HeaderBtn k="before" label="搬遷前" />
-              </th>
-              <th className="px-6 py-4 font-semibold">
-                <HeaderBtn k="after" label="搬遷後" />
-              </th>
-
-              {/* ✅ 狀態 -> 搬遷狀態 */}
-              <th className="px-6 py-4 font-semibold">搬遷狀態</th>
-
-              {/* ✅ 完成/未完成 */}
-              <th className="px-6 py-4 font-semibold">
-                <HeaderBtn k="complete" label="完成/未完成" />
-              </th>
-
-              <th className="px-6 py-4 font-semibold text-right">操作</th>
+              <Th k="category">分類</Th>
+              <Th k="deviceId">編號</Th>
+              <Th k="name">名稱</Th>
+              <Th k="brand">廠牌</Th>
+              <Th k="model">型號</Th>
+              <Th k="ports">Ports</Th>
+              <Th k="sizeU">U</Th>
+              <Th k="before">搬遷前</Th>
+              <Th k="after">搬遷後</Th>
+              <Th k="migration">搬遷狀態</Th>
+              <Th k="complete">完成/未完成</Th>
+              <th className="px-4 py-4 font-semibold text-right whitespace-nowrap">操作</th>
             </tr>
           </thead>
 
@@ -1926,85 +1853,64 @@ const DevicesPage = () => {
                 d.afterRackId && d.afterStartU != null
                   ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U`
                   : "-";
-
-              const complete = isMigratedComplete(d.migration);
+              const done = isMigratedComplete(d.migration);
 
               return (
-                <tr
-                  key={d.id}
-                  className="hover:bg-white/[0.02] transition-colors group"
-                >
-                  <td className="px-6 py-4">
+                <tr key={d.id} className="hover:bg-white/[0.02] transition-colors group">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     <span
-                      className="text-[10px] font-extrabold px-2 py-1 rounded-md border"
+                      className="text-[10px] font-extrabold px-2 py-1 rounded-md border whitespace-nowrap"
                       style={{
                         color: "var(--onColor)",
                         borderColor: "rgba(255,255,255,0.35)",
-                        backgroundColor: useStore.getState().catColors[d.category],
+                        backgroundColor: catColorVar(d.category, colors),
                       }}
                     >
                       {d.category}
                     </span>
                   </td>
 
-                  <td className="px-6 py-4">
-                    <div className="font-black text-sm">{d.deviceId}</div>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="font-black text-sm whitespace-nowrap">{d.deviceId}</div>
                   </td>
 
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     <button
                       onClick={() => setSelectedDeviceId(d.id)}
-                      className="text-sm font-bold text-[var(--text)] hover:text-[var(--accent)]"
+                      className="text-sm text-[var(--muted)] hover:text-[var(--accent)] font-semibold whitespace-nowrap"
+                      title="查看詳細"
                     >
                       {d.name}
                     </button>
                   </td>
 
-                  <td className="px-6 py-4 text-xs">
-                    <div className="text-[var(--text)]">{d.brand}</div>
-                  </td>
+                  <td className="px-4 py-4 text-xs text-[var(--text)] whitespace-nowrap">{d.brand}</td>
+                  <td className="px-4 py-4 text-xs text-[var(--muted)] whitespace-nowrap">{d.model}</td>
 
-                  <td className="px-6 py-4 text-xs">
-                    <div className="text-[var(--muted)]">{d.model}</div>
-                  </td>
+                  <td className="px-4 py-4 text-xs text-[var(--muted)] whitespace-nowrap">{d.ports}</td>
+                  <td className="px-4 py-4 text-xs text-[var(--muted)] whitespace-nowrap">{d.sizeU}U</td>
 
-                  <td className="px-6 py-4 text-xs text-[var(--muted)]">
-                    {d.ports}
-                  </td>
+                  <td className="px-4 py-4 text-xs text-[var(--muted)] whitespace-nowrap">{before}</td>
+                  <td className="px-4 py-4 text-xs text-[var(--muted)] whitespace-nowrap">{after}</td>
 
-                  <td className="px-6 py-4 text-xs text-[var(--muted)]">
-                    {d.sizeU}U
-                  </td>
-
-                  <td className="px-6 py-4 text-xs text-[var(--muted)]">
-                    {before}
-                  </td>
-                  <td className="px-6 py-4 text-xs text-[var(--muted)]">
-                    {after}
-                  </td>
-
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     <LampsRow m={d.migration} />
                   </td>
 
-                  <td className="px-6 py-4 text-xs">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     <span
-                      className={`px-2 py-1 rounded-lg border ${
-                        complete
-                          ? "border-[var(--lampOn)] text-[var(--lampOn)]"
-                          : "border-[var(--lampOff)] text-[var(--lampOff)]"
-                      }`}
+                      className="text-xs font-extrabold px-2 py-1 rounded-lg border"
                       style={{
-                        boxShadow: complete
-                          ? "0 0 12px rgba(0,255,0,0.25)"
-                          : "0 0 12px rgba(255,0,0,0.2)",
+                        borderColor: done ? "rgba(0,255,0,0.45)" : "rgba(255,0,0,0.45)",
+                        color: done ? "rgb(0,255,0)" : "rgb(255,0,0)",
+                        background: done ? "rgba(0,255,0,0.06)" : "rgba(255,0,0,0.06)",
                       }}
                     >
-                      {complete ? "完成" : "未完成"}
+                      {done ? "完成" : "未完成"}
                     </span>
                   </td>
 
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-4 py-4 text-right whitespace-nowrap">
                     {allowManage ? (
                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
@@ -2019,15 +1925,14 @@ const DevicesPage = () => {
                             clearPlacement("before", d.id);
                             clearPlacement("after", d.id);
                           }}
-                          className="px-3 py-2 rounded-lg border border-[var(--border)] text-xs hover:bg-white/5"
+                          className="px-3 py-2 rounded-lg border border-[var(--border)] text-xs hover:bg-white/5 whitespace-nowrap"
                           title="清除位置"
                         >
                           清除
                         </button>
                         <button
                           onClick={() => {
-                            if (confirm(`確定刪除 ${d.deviceId} - ${d.name}？`))
-                              deleteDeviceById(d.id);
+                            if (confirm(`確定刪除 ${d.deviceId} - ${d.name}？`)) deleteDeviceById(d.id);
                           }}
                           className="p-2 hover:bg-white/10 rounded-lg text-red-400"
                           title="刪除"
@@ -2054,7 +1959,7 @@ const DevicesPage = () => {
         </table>
       </div>
 
-      {importOpen && <CSVImportModal onClose={() => setImportOpen(false)} />}
+      {importOpen && <FullCSVImportModal onClose={() => setImportOpen(false)} />}
 
       {isAdding && (
         <DeviceModal
@@ -2106,7 +2011,62 @@ const DevicesPage = () => {
 };
 
 /* -----------------------------
-  Unplaced Panel（移除 legend）
+  Hover Card (tooltip)
+----------------------------- */
+
+function HoverCard({
+  x,
+  y,
+  d,
+  beforePos,
+  afterPos,
+}: {
+  x: number;
+  y: number;
+  d: Device;
+  beforePos: string;
+  afterPos: string;
+}) {
+  return (
+    <div
+      className="fixed z-[80] pointer-events-none"
+      style={{ left: x + 12, top: y + 12 }}
+    >
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl w-[320px] p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs text-[var(--muted)]">設備</div>
+            <div className="font-black text-sm truncate">{d.deviceId} · {d.name}</div>
+            <div className="text-xs text-[var(--muted)] truncate">
+              {d.brand} / {d.model} · {d.sizeU}U · {d.ports} ports
+            </div>
+          </div>
+          <div className="pt-1">
+            <LampsRow m={d.migration} />
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--panel2)] p-2">
+            <div className="text-[10px] text-[var(--muted)]">搬遷前</div>
+            <div className="font-bold truncate">{beforePos}</div>
+          </div>
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--panel2)] p-2">
+            <div className="text-[10px] text-[var(--muted)]">搬遷後</div>
+            <div className="font-bold truncate">{afterPos}</div>
+          </div>
+        </div>
+
+        <div className="mt-2 text-[11px] text-[var(--muted)] truncate">
+          IP：{d.ip || "-"}　SN：{d.serial || "-"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* -----------------------------
+  Unplaced Panel (no legend inside)
 ----------------------------- */
 
 function UnplacedPanel({
@@ -2163,34 +2123,21 @@ function UnplacedPanel({
                     ev.dataTransfer.effectAllowed = "move";
                   }}
                   className={`min-w-[260px] p-3 rounded-2xl border border-[var(--border)] hover:bg-white/[0.03] ${
-                    allowLayout
-                      ? "cursor-grab active:cursor-grabbing"
-                      : "cursor-not-allowed opacity-90"
+                    allowLayout ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-90"
                   }`}
                   title={allowLayout ? "拖曳到機櫃" : "Vendor 不允許拖放"}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-black text-[var(--text)] truncate">
-                        {d.deviceId}
-                      </div>
-                      <div className="text-xs text-[var(--muted)] truncate">
-                        {d.name}
-                      </div>
+                      <div className="text-sm font-black text-[var(--text)] truncate">{d.deviceId}</div>
+                      <div className="text-xs text-[var(--muted)] truncate">{d.name}</div>
                       <div className="text-xs text-[var(--muted)] mt-1 truncate">
                         {d.brand} · {d.model} · {d.sizeU}U
                       </div>
                     </div>
-                    <span
-                      className="text-[10px] font-extrabold px-2 py-1 rounded-md border"
-                      style={{
-                        color: "var(--onColor)",
-                        borderColor: "rgba(255,255,255,0.35)",
-                        backgroundColor: useStore.getState().catColors[d.category],
-                      }}
-                    >
-                      {d.category}
-                    </span>
+                    <div className="pt-1">
+                      <LampsRow m={d.migration} />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -2209,71 +2156,143 @@ function UnplacedPanel({
 }
 
 /* -----------------------------
-  Hover Tooltip (Floating Card)
+  Color Picker Bar (Admin only)
 ----------------------------- */
 
-function FloatingDeviceCard({
-  d,
-  x,
-  y,
-  mode,
+function ColorTuner({
+  disabled,
 }: {
-  d: Device;
-  x: number;
-  y: number;
-  mode: PlacementMode;
+  disabled: boolean;
 }) {
-  const beforePos =
-    d.beforeRackId && d.beforeStartU != null && d.beforeEndU != null
-      ? `${d.beforeRackId.replace(/^BEF_/, "")} ${d.beforeStartU}-${d.beforeEndU}U`
-      : "-";
-  const afterPos =
-    d.afterRackId && d.afterStartU != null && d.afterEndU != null
-      ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U`
-      : "-";
+  const colors = useStore((s) => s.colors);
+  const setColors = useStore((s) => s.setColors);
+
+  const Item = ({
+    label,
+    value,
+    onChange,
+  }: {
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+  }) => (
+    <div className={`flex items-center gap-2 ${disabled ? "opacity-60" : ""}`}>
+      <button
+        disabled={disabled}
+        className={`w-6 h-6 rounded-lg border border-white/20 ${
+          disabled ? "cursor-not-allowed" : "cursor-pointer"
+        }`}
+        style={{ background: value }}
+        title={disabled ? "Vendor 不可修改" : "點選調整顏色"}
+        onClick={(e) => {
+          // click forwarded to hidden input via label wrapper below
+          e.preventDefault();
+        }}
+      />
+      <div className="text-xs text-[var(--muted)] whitespace-nowrap">{label}</div>
+      <input
+        disabled={disabled}
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`h-7 w-9 bg-transparent border border-[var(--border)] rounded-lg ${
+          disabled ? "cursor-not-allowed" : "cursor-pointer"
+        }`}
+        title={disabled ? "Vendor 不可修改" : "RGB 調色盤"}
+      />
+    </div>
+  );
 
   return (
-    <div
-      className="fixed z-[80] pointer-events-none"
-      style={{ left: x + 14, top: y + 14 }}
-    >
-      <div className="w-[320px] rounded-2xl border border-[var(--border)] bg-[var(--panel)]/95 backdrop-blur shadow-2xl p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="font-black text-sm truncate">
-              {d.deviceId} · {d.name}
-            </div>
-            <div className="text-xs text-[var(--muted)] truncate">
-              {d.brand} / {d.model} · {d.ports} ports · {d.sizeU}U
-            </div>
-          </div>
-          <LampsRow m={d.migration} />
-        </div>
-
-        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--panel2)] p-2">
-            <div className="text-[10px] text-[var(--muted)]">搬遷前</div>
-            <div className="font-bold">{beforePos}</div>
-          </div>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--panel2)] p-2">
-            <div className="text-[10px] text-[var(--muted)]">搬遷後</div>
-            <div className="font-bold">{afterPos}</div>
-          </div>
-        </div>
-
-        <div className="mt-2 text-[11px] text-[var(--muted)]">
-          {mode === "after"
-            ? "提示：點設備可開詳細；點空 U（Admin）可新增並放置"
-            : "提示：點設備可開詳細；點空 U（Admin）可新增並放置"}
-        </div>
+    <div className="flex flex-wrap items-center gap-3 justify-end">
+      <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+        <SlidersHorizontal size={14} />
+        顏色
       </div>
+      <Item
+        label="Network"
+        value={colors.catNetwork}
+        onChange={(v) => setColors({ catNetwork: v })}
+      />
+      <Item
+        label="Server"
+        value={colors.catServer}
+        onChange={(v) => setColors({ catServer: v })}
+      />
+      <Item
+        label="Storage"
+        value={colors.catStorage}
+        onChange={(v) => setColors({ catStorage: v })}
+      />
+      <Item
+        label="Other"
+        value={colors.catOther}
+        onChange={(v) => setColors({ catOther: v })}
+      />
+      <div className="w-px h-6 bg-[var(--border)] mx-1" />
+      <Item
+        label="文字"
+        value={colors.rackText}
+        onChange={(v) => setColors({ rackText: v })}
+      />
     </div>
+  );
+}
+
+/* -----------------------------
+  Add & Place Modal (Admin)
+----------------------------- */
+
+function AddAndPlaceModal({
+  mode,
+  rackId,
+  u,
+  onClose,
+}: {
+  mode: PlacementMode;
+  rackId: string;
+  u: number;
+  onClose: () => void;
+}) {
+  const role = useStore((s) => s.role);
+  const addDevice = useStore((s) => s.addDevice);
+  const place = useStore((s) => s.place);
+
+  if (role !== "admin") return null;
+
+  const initial: DeviceDraft = {
+    category: "Other",
+    deviceId: "",
+    name: "",
+    brand: "",
+    model: "",
+    ports: 8,
+    sizeU: 1,
+    ip: "",
+    serial: "",
+    portMap: "",
+  };
+
+  return (
+    <DeviceModal
+      title={`新增設備並放置：${rackId.replace(/^(BEF_|AFT_)/, "")} / ${u}U`}
+      initial={initial}
+      onClose={onClose}
+      onSave={(d) => {
+        const id = addDevice(d);
+        const res = place(mode, id, rackId, u);
+        if (!res.ok) alert(res.message);
+        onClose();
+      }}
+    />
   );
 }
 
 /* -----------------------------
   Rack Planner
 ----------------------------- */
+
+const isNoMoveRack = (name: string) => name.startsWith("不搬存放區");
 
 const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
   const racks = useStore((s) => (mode === "before" ? s.beforeRacks : s.afterRacks));
@@ -2285,13 +2304,12 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
   const setUi = useStore((s) => s.setUi);
   const repairRackIds = useStore((s) => s.repairRackIds);
   const role = useStore((s) => s.role);
-
-  const catColors = useStore((s) => s.catColors);
-  const rackTextColor = useStore((s) => s.rackTextColor);
-  const setCatColor = useStore((s) => s.setCatColor);
-  const setRackTextColor = useStore((s) => s.setRackTextColor);
+  const colors = useStore((s) => s.colors);
 
   const allowLayout = canManageAssets(role);
+
+  const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [addPlace, setAddPlace] = useState<{ rackId: string; u: number } | null>(null);
 
   useEffect(() => {
     repairRackIds();
@@ -2313,20 +2331,18 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
   const setCollapsed = (v: boolean) =>
     setUi(mode === "before" ? { unplacedCollapsedBefore: v } : { unplacedCollapsedAfter: v });
 
-  // ✅ 依指定 row 切分：搬遷前(5/5/6/3)，搬遷後維持 6 一排
-  const rows = useMemo(() => {
+  const rackRows = useMemo(() => {
     if (mode === "before") {
-      const sizes = [5, 5, 6, 3];
-      const out: Rack[][] = [];
-      let idx = 0;
-      for (const sz of sizes) {
-        out.push(racks.slice(idx, idx + sz));
-        idx += sz;
-      }
-      const rest = racks.slice(idx);
-      if (rest.length) out.push(rest);
-      return out.filter((r) => r.length > 0);
+      const map = new Map(racks.map((r) => [r.name, r]));
+      const spec: string[][] = [
+        ["10", "09", "08", "07", "06"],
+        ["05", "04", "03", "02", "01"],
+        ["2F-A", "2F-B", "3F-A", "3F-B", "4F-A", "4F-B"],
+        ["9F", "SmartHouseA", "SmartHouseB"],
+      ];
+      return spec.map((row) => row.map((name) => map.get(name)!).filter(Boolean));
     }
+
     const out: Rack[][] = [];
     let cur: Rack[] = [];
     racks.forEach((r) => {
@@ -2368,26 +2384,14 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
   };
 
   const findDeviceAtU = (rackId: string, u: number) => {
-    const list = listForRack(rackId);
-    return list.find((d) => {
-      const s = (mode === "before" ? d.beforeStartU : d.afterStartU) ?? -1;
-      const e = (mode === "before" ? d.beforeEndU : d.afterEndU) ?? -1;
-      return u >= s && u <= e;
+    return devices.find((d) => {
+      const rId = mode === "before" ? d.beforeRackId : d.afterRackId;
+      const s = mode === "before" ? d.beforeStartU : d.afterStartU;
+      const e = mode === "before" ? d.beforeEndU : d.afterEndU;
+      if (rId !== rackId || s == null || e == null) return false;
+      return u >= Math.min(s, e) && u <= Math.max(s, e);
     });
   };
-
-  // Hover tooltip
-  const [hover, setHover] = useState<{
-    d: Device;
-    x: number;
-    y: number;
-  } | null>(null);
-
-  // Admin add & place
-  const [addPlace, setAddPlace] = useState<{
-    rackId: string;
-    u: number;
-  } | null>(null);
 
   const onDrop = (e: React.DragEvent, rackId: string, u: number) => {
     e.preventDefault();
@@ -2398,63 +2402,32 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
     if (!res.ok) alert(res.message);
   };
 
-  const onClickU = (rackId: string, u: number) => {
-    const hit = findDeviceAtU(rackId, u);
-    if (hit) {
-      setSelectedDeviceId(hit.id);
+  const onCellClick = (rackId: string, u: number) => {
+    const found = findDeviceAtU(rackId, u);
+    if (found) {
+      setSelectedDeviceId(found.id);
       return;
     }
-    if (!allowLayout) return;
-    setAddPlace({ rackId, u });
+    // empty
+    if (role === "admin") setAddPlace({ rackId, u });
   };
 
-  const PlannerTopRight = () => (
-    <div className="flex items-center gap-4 flex-wrap justify-end">
-      <div className="flex items-center gap-3">
-        <div className="text-xs text-[var(--muted)]">類別顏色</div>
-        {(["Network", "Server", "Storage", "Other"] as DeviceCategory[]).map((c) => (
-          <label key={c} className="flex items-center gap-2 text-xs">
-            <span className="hidden sm:inline text-[var(--muted)]">{c}</span>
-            <input
-              type="color"
-              value={catColors[c]}
-              onChange={(e) => setCatColor(c, e.target.value)}
-              className="w-8 h-8 p-0 border-0 bg-transparent cursor-pointer"
-              title={`${c} 顏色`}
-            />
-          </label>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-2">
-        <div className="text-xs text-[var(--muted)]">設備文字顏色</div>
-        <input
-          type="color"
-          value={rackTextColor}
-          onChange={(e) => setRackTextColor(e.target.value)}
-          className="w-8 h-8 p-0 border-0 bg-transparent cursor-pointer"
-          title="設備文字顏色"
-        />
-      </div>
-    </div>
-  );
+  const title = mode === "before" ? "搬遷前 機櫃佈局" : "搬遷後 機櫃佈局";
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-black text-[var(--accent)]">
-            {mode === "before" ? "搬遷前" : "搬遷後"} 機櫃佈局
-          </h2>
+          <h2 className="text-2xl font-black text-[var(--accent)]">{title}</h2>
           <p className="text-[var(--muted)] text-sm">
             {allowLayout
-              ? "拖拉設備到機櫃；點空 U 可新增設備並放置（Admin）"
+              ? "拖拉設備到機櫃；已放置設備也可再拖拉調整位置（含 U 重疊檢查）"
               : "Vendor：只能查看（不可拖放/不可調整機櫃佈局），但可在搬遷後切換燈號"}
           </p>
         </div>
 
-        {/* ✅ 右上角顏色工具 */}
-        <PlannerTopRight />
+        {/* ✅ 顏色調整：Admin only；保存到 localStorage，其他帳號會看到 */}
+        <ColorTuner disabled={role !== "admin"} />
       </div>
 
       <UnplacedPanel
@@ -2465,11 +2438,11 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
         allowLayout={allowLayout}
       />
 
-      <div className="space-y-6">
-        {rows.map((row, idx) => (
+      <div className="space-y-5">
+        {rackRows.map((row, idx) => (
           <div
             key={idx}
-            className="grid gap-4"
+            className="grid gap-3"
             style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}
           >
             {row.map((rack) => (
@@ -2477,14 +2450,19 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                 key={rack.id}
                 className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden"
               >
-                {/* ✅ 機櫃編號加大/粗體 */}
+                {/* ✅ 機櫃編號字體加大、換字重 */}
                 <div
-                  className="bg-black/30 text-center py-2 font-black tracking-wide text-base border-b border-[var(--border)]"
+                  className="bg-black/30 text-center py-2 border-b border-[var(--border)]"
                   style={{
+                    fontSize: "15px",
+                    fontWeight: 900,
+                    letterSpacing: "0.04em",
                     color:
                       mode === "after" && isNoMoveRack(rack.name)
-                        ? "var(--lampOff)"
+                        ? "rgb(255,0,0)"
                         : "var(--accent)",
+                    fontFamily:
+                      'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif',
                   }}
                 >
                   {rack.name}
@@ -2493,7 +2471,7 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                 {/* ✅ 更緊湊 padding */}
                 <div className="p-2">
                   <div className="flex gap-2">
-                    {/* U Numbers */}
+                    {/* U numbers */}
                     <div className="relative">
                       <div className="relative flex flex-col-reverse">
                         {Array.from({ length: 42 }).map((_, i) => {
@@ -2511,7 +2489,7 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                       </div>
                     </div>
 
-                    {/* Rack Grid */}
+                    {/* rack grid */}
                     <div
                       className="relative flex-1 border border-[var(--border)] bg-black/20 rounded-xl overflow-hidden"
                       style={{ height: 42 * U_H }}
@@ -2525,10 +2503,14 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                               key={u}
                               onDragOver={(e) => allowLayout && e.preventDefault()}
                               onDrop={(e) => onDrop(e, rack.id, u)}
-                              onClick={() => onClickU(rack.id, u)}
+                              onClick={() => onCellClick(rack.id, u)}
                               className="relative cursor-pointer"
                               style={{ height: U_H }}
-                              title="點擊此 U"
+                              title={
+                                role === "admin"
+                                  ? "點格子：有設備=開詳細；空格=新增並放置"
+                                  : "點格子：有設備=開詳細"
+                              }
                             >
                               <div
                                 className="absolute inset-x-0 top-0"
@@ -2545,13 +2527,20 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                         })}
                       </div>
 
+                      {/* blocks */}
                       {listForRack(rack.id).map((d) => {
-                        const { bottom, height } = getBlockStyle(d);
-                        const catColor = catColors[d.category];
+                        const { bottom, height, start, end } = getBlockStyle(d);
+                        const catColor = catColorVar(d.category, colors);
+                        const is1U = (end - start + 1) === 1;
 
-                        // ✅ 動態字體：依高度縮放
-                        const font1 = height >= 80 ? 13 : height >= 60 ? 12 : 11;
-                        const font2 = height >= 80 ? 12 : height >= 60 ? 11 : 10;
+                        const beforePos =
+                          d.beforeRackId && d.beforeStartU != null && d.beforeEndU != null
+                            ? `${d.beforeRackId.replace(/^BEF_/, "")} ${d.beforeStartU}-${d.beforeEndU}U`
+                            : "-";
+                        const afterPos =
+                          d.afterRackId && d.afterStartU != null && d.afterEndU != null
+                            ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U`
+                            : "-";
 
                         return (
                           <div
@@ -2563,37 +2552,24 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                               ev.dataTransfer.effectAllowed = "move";
                             }}
                             onClick={() => setSelectedDeviceId(d.id)}
-                            onMouseEnter={(ev) => {
-                              setHover({
-                                d,
-                                x: ev.clientX,
-                                y: ev.clientY,
-                              });
-                            }}
-                            onMouseMove={(ev) => {
-                              setHover((p) =>
-                                p ? { ...p, x: ev.clientX, y: ev.clientY } : p
-                              );
-                            }}
+                            onMouseMove={(e) => setHover({ id: d.id, x: e.clientX, y: e.clientY })}
                             onMouseLeave={() => setHover(null)}
-                            className="absolute left-1 right-1 border border-white/60 select-none"
+                            className="absolute left-1 right-1 border border-white/70 select-none transition-transform"
                             style={{
                               bottom,
                               height,
                               backgroundColor: catColor,
                               cursor: allowLayout ? "grab" : "pointer",
-                              borderRadius: 10, // ✅ 小圓角
+                              borderRadius: 8, // ✅ 小圓角
                               boxShadow:
-                                "0 10px 30px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.12) inset",
-                              transform: "translateZ(0)",
+                                hover?.id === d.id
+                                  ? "0 0 0 2px rgba(255,255,255,0.35), 0 0 22px rgba(0,0,0,0.28)"
+                                  : "none",
+                              transform: hover?.id === d.id ? "translateY(-1px)" : "translateY(0)",
                             }}
+                            title="點擊開啟設備詳細"
                           >
-                            {/* Hover interaction */}
-                            <div className="absolute inset-0 rounded-[10px] opacity-0 hover:opacity-100 transition-opacity"
-                              style={{ background: "rgba(255,255,255,0.12)" }}
-                            />
-
-                            <div className="h-full w-full px-2 py-1 relative">
+                            <div className="h-full w-full px-2 py-1">
                               {allowLayout && (
                                 <button
                                   onClick={(e) => {
@@ -2603,39 +2579,62 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                                   className="absolute top-1 right-1 p-1 rounded-lg hover:bg-white/20"
                                   title="清除位置"
                                 >
-                                  <X size={14} style={{ color: rackTextColor }} />
+                                  <X size={14} className="text-white" />
                                 </button>
                               )}
 
-                              {/* ✅ 文字不要被燈號擋住：燈號移到右下，內容 padding-right */}
-                              <div className="pr-8">
-                                <div
-                                  className="font-black truncate"
-                                  style={{
-                                    color: rackTextColor,
-                                    fontSize: font1,
-                                    lineHeight: "1.1",
-                                  }}
-                                >
-                                  {d.deviceId} | {d.name}
-                                </div>
-                                <div
-                                  className="font-bold truncate opacity-95"
-                                  style={{
-                                    color: rackTextColor,
-                                    fontSize: font2,
-                                    lineHeight: "1.1",
-                                    marginTop: 2,
-                                  }}
-                                >
-                                  {d.model || "-"}
-                                </div>
+                              {/* ✅ 文字不要被燈號擋住：右下燈號區保留 padding */}
+                              <div className="pr-10">
+                                {is1U ? (
+                                  <div
+                                    className="font-black truncate"
+                                    style={{
+                                      color: colors.rackText,
+                                      fontSize: "clamp(9px, 0.75vw + 4px, 12px)",
+                                      lineHeight: "1.15",
+                                      marginTop: 2,
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    {d.deviceId} | {d.name} | {d.model}
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div
+                                      className="font-black truncate"
+                                      style={{
+                                        color: colors.rackText,
+                                        fontSize: "clamp(10px, 0.9vw, 13px)",
+                                        lineHeight: "1.15",
+                                      }}
+                                    >
+                                      {d.deviceId} | {d.name}
+                                    </div>
+                                    <div
+                                      className="font-bold truncate"
+                                      style={{
+                                        color: colors.rackText,
+                                        opacity: 0.95,
+                                        fontSize: "clamp(10px, 0.85vw, 12px)",
+                                        lineHeight: "1.15",
+                                        marginTop: 2,
+                                      }}
+                                    >
+                                      {d.model}
+                                    </div>
+                                  </>
+                                )}
                               </div>
 
                               <div className="absolute right-1 bottom-1">
                                 <LampsRow m={d.migration} />
                               </div>
                             </div>
+
+                            {/* hover card */}
+                            {hover?.id === d.id && (
+                              <HoverCard x={hover.x} y={hover.y} d={d} beforePos={beforePos} afterPos={afterPos} />
+                            )}
                           </div>
                         );
                       })}
@@ -2648,13 +2647,11 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
         ))}
       </div>
 
-      {hover && <FloatingDeviceCard d={hover.d} x={hover.x} y={hover.y} mode={mode} />}
-
       {addPlace && (
         <AddAndPlaceModal
           mode={mode}
           rackId={addPlace.rackId}
-          startU={addPlace.u}
+          u={addPlace.u}
           onClose={() => setAddPlace(null)}
         />
       )}
@@ -2744,9 +2741,7 @@ const AdminPage = () => {
                   <option value="vendor">Vendor</option>
                 </select>
                 {isAdminAccount && (
-                  <div className="text-[11px] text-[var(--muted)] mt-1">
-                    admin 必須保持 Admin 權限
-                  </div>
+                  <div className="text-[11px] text-[var(--muted)] mt-1">admin 必須保持 Admin 權限</div>
                 )}
               </div>
 
@@ -2762,10 +2757,7 @@ const AdminPage = () => {
             </div>
 
             <div className="mt-5 flex justify-end gap-3">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5"
-              >
+              <button onClick={onClose} className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5">
                 取消
               </button>
               <button
@@ -2833,9 +2825,7 @@ const AdminPage = () => {
                   <tr key={a.username} className="hover:bg-white/[0.03]">
                     <td className="px-4 py-3">
                       <div className="font-black">{a.username}</div>
-                      {a.username === "admin" && (
-                        <div className="text-xs text-[var(--muted)]">admin 不能刪除</div>
-                      )}
+                      {a.username === "admin" && <div className="text-xs text-[var(--muted)]">admin 不能刪除</div>}
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-xs px-2 py-1 rounded-lg border border-[var(--border)] text-[var(--muted)]">
@@ -2843,7 +2833,7 @@ const AdminPage = () => {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         <button
                           onClick={() => {
                             setCreating(false);
@@ -2860,9 +2850,7 @@ const AdminPage = () => {
                           }}
                           disabled={a.username === "admin"}
                           className={`px-3 py-2 rounded-xl border border-[var(--border)] flex items-center gap-2 text-sm ${
-                            a.username === "admin"
-                              ? "opacity-50 cursor-not-allowed"
-                              : "hover:bg-white/5 text-red-300"
+                            a.username === "admin" ? "opacity-50 cursor-not-allowed" : "hover:bg-white/5 text-red-300"
                           }`}
                         >
                           <Trash2 size={16} /> 刪除
@@ -2871,7 +2859,6 @@ const AdminPage = () => {
                     </td>
                   </tr>
                 ))}
-
               {accounts.length === 0 && (
                 <tr>
                   <td colSpan={3} className="px-4 py-8 text-center text-[var(--muted)]">
@@ -2884,7 +2871,7 @@ const AdminPage = () => {
         </div>
 
         <div className="mt-4 text-xs text-[var(--muted)]">
-          新增帳號可選 Admin / Vendor；Vendor 只能查看（不可拖放/不可新增刪除匯入），但可切換搬遷後燈號。
+          新增帳號可選 Admin / Vendor；Vendor 只能查看（不可拖放/不可新增刪除匯入/不可改顏色），但可切換搬遷後燈號。
         </div>
       </div>
 
@@ -2984,17 +2971,17 @@ export default function App() {
           >
             <Server size={18} />
           </div>
-          <h1 className="text-base md:text-lg font-black tracking-tight">
-            SET機房搬遷專案管理
+          <h1 className="text-lg md:text-xl font-black tracking-tighter uppercase italic">
+            Migrate<span className="text-[var(--accent)]">Pro</span>
           </h1>
+          <div className="hidden md:flex items-center gap-2 text-xs text-[var(--muted)]">
+            <Sparkles size={14} className="text-[var(--accent)]" />
+            機房搬遷專案管理
+          </div>
         </div>
 
         <div className="flex items-center gap-2 md:gap-4">
-          <button
-            onClick={toggleFs}
-            className="p-2 hover:bg-white/5 rounded-xl"
-            title={isFs ? "離開全螢幕" : "全螢幕"}
-          >
+          <button onClick={toggleFs} className="p-2 hover:bg-white/5 rounded-xl" title={isFs ? "離開全螢幕" : "全螢幕"}>
             {isFs ? <Minimize size={18} /> : <Expand size={18} />}
           </button>
 
@@ -3002,19 +2989,14 @@ export default function App() {
             value={themeStyle}
             onChange={(e) => setThemeStyle(e.target.value as ThemeStyle)}
             className="bg-[var(--panel2)] border border-[var(--border)] rounded-lg text-xs px-2 py-1 outline-none hidden sm:block"
-            title="佈景主題"
           >
-            <option value="neon">Neon（保留）</option>
-            <option value="holo">Holo AI</option>
-            <option value="glass">Glass AI</option>
-            <option value="midnightAI">Midnight AI</option>
+            <option value="neon">Neon</option>
+            <option value="horizon">Horizon</option>
+            <option value="nebula">Nebula</option>
+            <option value="matrix">Matrix</option>
           </select>
 
-          <button
-            onClick={toggleTheme}
-            className="p-2 hover:bg-white/5 rounded-xl"
-            title="切換深/淺色"
-          >
+          <button onClick={toggleTheme} className="p-2 hover:bg-white/5 rounded-xl" title="切換深/淺色">
             {theme === "dark" ? "🌙" : "☀️"}
           </button>
 
@@ -3024,20 +3006,12 @@ export default function App() {
             <span className="text-xs px-2 py-0.5 rounded-lg border border-[var(--border)] text-[var(--muted)]">
               {role === "admin" ? "Admin" : "Vendor"}
             </span>
-            <button
-              onClick={logout}
-              className="ml-1 p-1 rounded-lg hover:bg-white/10"
-              title="登出"
-            >
+            <button onClick={logout} className="ml-1 p-1 rounded-lg hover:bg-white/10" title="登出">
               <LogOut size={16} className="text-[var(--muted)]" />
             </button>
           </div>
 
-          <button
-            onClick={logout}
-            className="md:hidden p-2 hover:bg-white/5 rounded-xl"
-            title="登出"
-          >
+          <button onClick={logout} className="md:hidden p-2 hover:bg-white/5 rounded-xl" title="登出">
             <LogOut size={18} />
           </button>
         </div>
@@ -3102,11 +3076,7 @@ export default function App() {
           <button
             key={item.id}
             onClick={() => setPage(item.id)}
-            className={`p-2 rounded-lg ${
-              page === item.id
-                ? "text-[var(--accent)] bg-[var(--panel2)]"
-                : "text-[var(--muted)]"
-            }`}
+            className={`p-2 rounded-lg ${page === item.id ? "text-[var(--accent)] bg-[var(--panel2)]" : "text-[var(--muted)]"}`}
             title={item.label}
           >
             {item.icon}
