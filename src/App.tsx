@@ -26,7 +26,6 @@ import {
   KeyRound,
   Save,
   Sparkles,
-  SlidersHorizontal,
 } from "lucide-react";
 import {
   BarChart,
@@ -109,14 +108,6 @@ type Account = {
   role: Role;
 };
 
-type ColorSettings = {
-  catNetwork: string;
-  catStorage: string;
-  catServer: string;
-  catOther: string;
-  rackText: string;
-};
-
 /* -----------------------------
   LocalStorage Keys
 ----------------------------- */
@@ -129,33 +120,41 @@ const LS = {
   auth: "migrate.auth",
   user: "migrate.user",
   accounts: "migrate.accounts",
-  colors: "migrate.colors",
 } as const;
+
+/* -----------------------------
+  Fixed Colors (自訂固定配色，取消調色盤)
+----------------------------- */
+
+const FIXED_COLORS = {
+  Network: "#22c55e", // green
+  Server: "#60a5fa", // blue
+  Storage: "#a78bfa", // purple
+  Other: "#f59e0b", // amber
+  rackText: "#0b1220", // light mode readable
+  rackTextDark: "#f8fafc", // dark mode readable
+};
 
 /* -----------------------------
   Rack Layouts
 ----------------------------- */
 
 const BEFORE_RACKS: Rack[] = [
-  // 第一排：10, 09, 08, 07, 06
   ...["10", "09", "08", "07", "06"].map((n) => ({
     id: `BEF_${n}`,
     name: n,
     units: 42,
   })),
-  // 第二排：05, 04, 03, 02, 01
   ...["05", "04", "03", "02", "01"].map((n) => ({
     id: `BEF_${n}`,
     name: n,
     units: 42,
   })),
-  // 第三排：2F-A, 2F-B, 3F-A, 3F-B, 4F-A, 4F-B
   ...["2F-A", "2F-B", "3F-A", "3F-B", "4F-A", "4F-B"].map((n) => ({
     id: `BEF_${n}`,
     name: n,
     units: 42,
   })),
-  // 第四排：9F, SmartHouseA, SmartHouseB
   ...["9F", "SmartHouseA", "SmartHouseB"].map((n) => ({
     id: `BEF_${n}`,
     name: n,
@@ -357,18 +356,6 @@ const normalizeDevices = (raw: any[]): Device[] => {
 };
 
 /* -----------------------------
-  Default colors (Admin adjustable)
------------------------------ */
-
-const DEFAULT_COLORS: ColorSettings = {
-  catNetwork: "#8fb3a0",
-  catStorage: "#8fb0d3",
-  catServer: "#a79ad9",
-  catOther: "#e0b83a",
-  rackText: "#f8fafc",
-};
-
-/* -----------------------------
   Theme Tokens
 ----------------------------- */
 
@@ -376,28 +363,24 @@ const ThemeTokens = () => {
   const style = useStore((s) => s.themeStyle);
 
   const presets: Record<ThemeStyle, { light: string; dark: string }> = {
-    // ✅ 保留 Neon（你原本的）
     neon: {
       light:
         ":root{--bg:#f7fafc;--panel:#ffffff;--panel2:#f1f5f9;--text:#0b1220;--muted:#475569;--border:#e2e8f0;--accent:#06b6d4;--accent2:#a855f7;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
         "html.dark{--bg:#05070d;--panel:#0b1220;--panel2:#1a2235;--text:#e5e7eb;--muted:#94a3b8;--border:#1e293b;--accent:#22d3ee;--accent2:#c084fc;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
-    // ✅ 新：Horizon（AI SaaS 感：藍綠 + 柔紫）
     horizon: {
       light:
         ":root{--bg:#f6f9ff;--panel:#ffffff;--panel2:#eef3ff;--text:#0a1020;--muted:#5b6478;--border:#e6ebff;--accent:#2563eb;--accent2:#14b8a6;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
         "html.dark{--bg:#070a14;--panel:#0b1020;--panel2:#101a33;--text:#f1f5f9;--muted:#9aa4b2;--border:#1a2550;--accent:#60a5fa;--accent2:#2dd4bf;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
-    // ✅ 新：Nebula（AI 紫粉漸層感）
     nebula: {
       light:
         ":root{--bg:#fbf7ff;--panel:#ffffff;--panel2:#f6edff;--text:#140a20;--muted:#6b5b7a;--border:#f0e1ff;--accent:#7c3aed;--accent2:#ec4899;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
         "html.dark{--bg:#080614;--panel:#0f0b1f;--panel2:#1a1233;--text:#f8fafc;--muted:#a7a1b2;--border:#2a1f4d;--accent:#a78bfa;--accent2:#fb7185;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
-    // ✅ 新：Matrix（AI 深色、冷綠點綴）
     matrix: {
       light:
         ":root{--bg:#f7fbf9;--panel:#ffffff;--panel2:#edf7f2;--text:#07140f;--muted:#5a6b63;--border:#dff2e8;--accent:#10b981;--accent2:#06b6d4;--onColor:#07140f;--lampOn:#00ff00;--lampOff:#ff0000}",
@@ -416,6 +399,22 @@ function useApplyTheme() {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
 }
+
+const rackTextColor = (theme: ThemeMode) =>
+  theme === "dark" ? FIXED_COLORS.rackTextDark : FIXED_COLORS.rackText;
+
+const catColor = (cat: DeviceCategory) => {
+  switch (cat) {
+    case "Network":
+      return FIXED_COLORS.Network;
+    case "Server":
+      return FIXED_COLORS.Server;
+    case "Storage":
+      return FIXED_COLORS.Storage;
+    default:
+      return FIXED_COLORS.Other;
+  }
+};
 
 /* -----------------------------
   Lamps (pure RGB + glow)
@@ -444,6 +443,7 @@ const LampsRow = ({ m }: { m: MigrationFlags }) => (
 
 /* -----------------------------
   CSV Export / Import (Full backup/restore)
+  ✅ 移除顏色欄位（顏色固定）
 ----------------------------- */
 
 const FULL_HEADERS = [
@@ -468,12 +468,6 @@ const FULL_HEADERS = [
   "m_cabled",
   "m_powered",
   "m_tested",
-  // settings (repeat per row; import reads from first row)
-  "catNetworkColor",
-  "catStorageColor",
-  "catServerColor",
-  "catOtherColor",
-  "rackTextColor",
 ];
 
 function escCSV(v: any) {
@@ -530,7 +524,7 @@ function parseCSV(text: string) {
   return rows.filter((r) => r.some((c) => c.trim().length > 0));
 }
 
-function downloadFullCSV(devices: Device[], colors: ColorSettings) {
+function downloadFullCSV(devices: Device[]) {
   const rows = devices.map((d) => [
     d.id,
     d.category,
@@ -553,11 +547,6 @@ function downloadFullCSV(devices: Device[], colors: ColorSettings) {
     d.migration.cabled ? 1 : 0,
     d.migration.powered ? 1 : 0,
     d.migration.tested ? 1 : 0,
-    colors.catNetwork,
-    colors.catStorage,
-    colors.catServer,
-    colors.catOther,
-    colors.rackText,
   ]);
 
   const csv = `${FULL_HEADERS.join(",")}\n${rows
@@ -587,7 +576,7 @@ function downloadFullCSVTemplate() {
     "1",
     "10.0.0.2",
     "SN001",
-    "01/40U | Gi1/0/1 -> FW\n01/40U | Gi1/0/2 -> Core-RTR",
+    "01/40U | Gi1/0/1 -> FW\nA1/20U | ETH1 -> TOR",
     "BEF_01",
     "40",
     "40",
@@ -598,11 +587,6 @@ function downloadFullCSVTemplate() {
     "1",
     "0",
     "0",
-    "#8fb3a0",
-    "#8fb0d3",
-    "#a79ad9",
-    "#e0b83a",
-    "#f8fafc",
   ];
   const csv = `${FULL_HEADERS.join(",")}\n${templateRow
     .map(escCSV)
@@ -631,29 +615,23 @@ interface Store {
   selectedDeviceId: string | null;
   ui: UiState;
 
-  colors: ColorSettings;
-  setColors: (patch: Partial<ColorSettings>) => void;
-
-  // accounts
   accounts: Account[];
   upsertAccount: (a: Account) => { ok: boolean; message?: string };
   deleteAccount: (username: string) => { ok: boolean; message?: string };
 
-  // auth
   isAuthed: boolean;
   userName: string | null;
   role: Role;
   login: (u: string, p: string) => LoginResult;
   logout: () => void;
 
-  // actions
   setPage: (p: PageKey) => void;
   toggleTheme: () => void;
   setThemeStyle: (s: ThemeStyle) => void;
   setSelectedDeviceId: (id: string | null) => void;
   setUi: (patch: Partial<UiState>) => void;
 
-  addDevice: (draft: DeviceDraft) => string; // returns new id
+  addDevice: (draft: DeviceDraft) => string;
   updateDevice: (id: string, patch: Partial<DeviceDraft>) => void;
   deleteDeviceById: (id: string) => void;
 
@@ -707,18 +685,6 @@ const useStore = create<Store>((set, get) => ({
   selectedDeviceId: null,
   ui: { ...DEFAULT_UI, ...readJson<UiState>(LS.ui, DEFAULT_UI) },
 
-  colors: (() => {
-    const stored = readJson<ColorSettings>(LS.colors, DEFAULT_COLORS);
-    return { ...DEFAULT_COLORS, ...stored };
-  })(),
-
-  setColors: (patch) =>
-    set((s) => {
-      const next = { ...s.colors, ...patch };
-      writeJson(LS.colors, next);
-      return { colors: next };
-    }),
-
   accounts: loadAccounts(),
 
   upsertAccount: (a) => {
@@ -761,7 +727,9 @@ const useStore = create<Store>((set, get) => ({
   login: (u, p) => {
     const username = u.trim();
     const accounts = get().accounts;
-    const found = accounts.find((a) => a.username === username && a.password === p);
+    const found = accounts.find(
+      (a) => a.username === username && a.password === p
+    );
     if (!found) return { ok: false, message: "帳號或密碼錯誤" };
     localStorage.setItem(LS.auth, "1");
     localStorage.setItem(LS.user, username);
@@ -829,7 +797,9 @@ const useStore = create<Store>((set, get) => ({
 
   updateDevice: (id, patch) =>
     set((s) => {
-      const next = s.devices.map((d) => (d.id === id ? ({ ...d, ...patch } as Device) : d));
+      const next = s.devices.map((d) =>
+        d.id === id ? ({ ...d, ...patch } as Device) : d
+      );
       writeJson(LS.devices, next);
       return { devices: next };
     }),
@@ -838,7 +808,10 @@ const useStore = create<Store>((set, get) => ({
     set((s) => {
       const next = s.devices.filter((d) => d.id !== id);
       writeJson(LS.devices, next);
-      return { devices: next, selectedDeviceId: s.selectedDeviceId === id ? null : s.selectedDeviceId };
+      return {
+        devices: next,
+        selectedDeviceId: s.selectedDeviceId === id ? null : s.selectedDeviceId,
+      };
     }),
 
   importFullCSV: (fileText) => {
@@ -852,58 +825,56 @@ const useStore = create<Store>((set, get) => ({
         if (idx(k) === -1) return { ok: false, message: `CSV 缺少欄位：${k}` };
       }
 
-      const get = (r: string[], k: string) => String(r[idx(k)] ?? "").trim();
-
-      // read settings from first data row
-      const first = rows[1];
-      const nextColors: ColorSettings = {
-        catNetwork: get(first, "catNetworkColor") || DEFAULT_COLORS.catNetwork,
-        catStorage: get(first, "catStorageColor") || DEFAULT_COLORS.catStorage,
-        catServer: get(first, "catServerColor") || DEFAULT_COLORS.catServer,
-        catOther: get(first, "catOtherColor") || DEFAULT_COLORS.catOther,
-        rackText: get(first, "rackTextColor") || DEFAULT_COLORS.rackText,
-      };
+      const getv = (r: string[], k: string) =>
+        String(r[idx(k)] ?? "").trim();
 
       const devices: Device[] = rows.slice(1).map((r) => {
-        const sizeU = Math.max(1, Math.min(42, Number(get(r, "sizeU") || 1)));
-        const beforeRackId = get(r, "beforeRackId") || undefined;
-        const afterRackId = get(r, "afterRackId") || undefined;
+        const sizeU = Math.max(1, Math.min(42, Number(getv(r, "sizeU") || 1)));
+        const beforeRackId = getv(r, "beforeRackId") || undefined;
+        const afterRackId = getv(r, "afterRackId") || undefined;
 
-        const beforeStartU = get(r, "beforeStartU");
-        const beforeEndU = get(r, "beforeEndU");
-        const afterStartU = get(r, "afterStartU");
-        const afterEndU = get(r, "afterEndU");
+        const beforeStartU = getv(r, "beforeStartU");
+        const beforeEndU = getv(r, "beforeEndU");
+        const afterStartU = getv(r, "afterStartU");
+        const afterEndU = getv(r, "afterEndU");
 
         return {
-          id: get(r, "id") || crypto.randomUUID(),
-          category: (get(r, "category") as DeviceCategory) || "Other",
-          deviceId: get(r, "deviceId"),
-          name: get(r, "name"),
-          brand: get(r, "brand"),
-          model: get(r, "model"),
-          ports: Number(get(r, "ports") || 0),
+          id: getv(r, "id") || crypto.randomUUID(),
+          category: (getv(r, "category") as DeviceCategory) || "Other",
+          deviceId: getv(r, "deviceId"),
+          name: getv(r, "name"),
+          brand: getv(r, "brand"),
+          model: getv(r, "model"),
+          ports: Number(getv(r, "ports") || 0),
           sizeU,
-          ip: get(r, "ip") || "",
-          serial: get(r, "serial") || "",
-          portMap: get(r, "portMap") || "",
-          beforeRackId: beforeRackId ? (isProbablyOldRackId(beforeRackId) ? toBeforeRackId(beforeRackId) : beforeRackId) : undefined,
+          ip: getv(r, "ip") || "",
+          serial: getv(r, "serial") || "",
+          portMap: getv(r, "portMap") || "",
+          beforeRackId: beforeRackId
+            ? isProbablyOldRackId(beforeRackId)
+              ? toBeforeRackId(beforeRackId)
+              : beforeRackId
+            : undefined,
           beforeStartU: beforeStartU ? Number(beforeStartU) : undefined,
           beforeEndU: beforeEndU ? Number(beforeEndU) : undefined,
-          afterRackId: afterRackId ? (isProbablyOldRackId(afterRackId) ? toAfterRackId(afterRackId) : afterRackId) : undefined,
+          afterRackId: afterRackId
+            ? isProbablyOldRackId(afterRackId)
+              ? toAfterRackId(afterRackId)
+              : afterRackId
+            : undefined,
           afterStartU: afterStartU ? Number(afterStartU) : undefined,
           afterEndU: afterEndU ? Number(afterEndU) : undefined,
           migration: {
-            racked: get(r, "m_racked") === "1",
-            cabled: get(r, "m_cabled") === "1",
-            powered: get(r, "m_powered") === "1",
-            tested: get(r, "m_tested") === "1",
+            racked: getv(r, "m_racked") === "1",
+            cabled: getv(r, "m_cabled") === "1",
+            powered: getv(r, "m_powered") === "1",
+            tested: getv(r, "m_tested") === "1",
           },
         };
       });
 
       writeJson(LS.devices, devices);
-      writeJson(LS.colors, nextColors);
-      set({ devices, colors: nextColors });
+      set({ devices });
 
       return { ok: true };
     } catch (e: any) {
@@ -983,24 +954,7 @@ const useStore = create<Store>((set, get) => ({
 }));
 
 /* -----------------------------
-  Colors helpers
------------------------------ */
-
-const catColorVar = (cat: DeviceCategory, colors: ColorSettings) => {
-  switch (cat) {
-    case "Network":
-      return colors.catNetwork;
-    case "Storage":
-      return colors.catStorage;
-    case "Server":
-      return colors.catServer;
-    default:
-      return colors.catOther;
-  }
-};
-
-/* -----------------------------
-  Login Page (MigratePro + same vibe)
+  Login Page
 ----------------------------- */
 
 function LoginPage() {
@@ -1262,7 +1216,6 @@ function DeviceDetailModal({
 
 /* -----------------------------
   Device Modal（新增/編輯）
-  - Port對接備註：多行（最多48行）
 ----------------------------- */
 
 function DeviceModal({
@@ -1431,7 +1384,7 @@ function DeviceModal({
                 onChange={(e) => {
                   const next = e.target.value;
                   const lines = next.split(/\r?\n/);
-                  if (lines.length > 48) return; // hard cap
+                  if (lines.length > 48) return;
                   setD((p) => ({ ...p, portMap: next }));
                 }}
                 placeholder={"例：\n01/40U | Gi1/0/1 -> FW\nA1/20U | ETH1 -> TOR"}
@@ -1459,17 +1412,16 @@ function DeviceModal({
 
 const Dashboard = () => {
   const devices = useStore((s) => s.devices);
-  const colors = useStore((s) => s.colors);
 
   const racked = devices.filter((d) => d.migration.racked).length;
   const completed = devices.filter((d) => isMigratedComplete(d.migration)).length;
   const pending = Math.max(0, devices.length - completed);
 
   const chartData = [
-    { name: "Network", count: devices.filter((d) => d.category === "Network").length, fill: colors.catNetwork },
-    { name: "Storage", count: devices.filter((d) => d.category === "Storage").length, fill: colors.catStorage },
-    { name: "Server", count: devices.filter((d) => d.category === "Server").length, fill: colors.catServer },
-    { name: "Other", count: devices.filter((d) => d.category === "Other").length, fill: colors.catOther },
+    { name: "Network", count: devices.filter((d) => d.category === "Network").length, fill: FIXED_COLORS.Network },
+    { name: "Storage", count: devices.filter((d) => d.category === "Storage").length, fill: FIXED_COLORS.Storage },
+    { name: "Server", count: devices.filter((d) => d.category === "Server").length, fill: FIXED_COLORS.Server },
+    { name: "Other", count: devices.filter((d) => d.category === "Other").length, fill: FIXED_COLORS.Other },
   ];
 
   const stats = [
@@ -1547,7 +1499,7 @@ const Dashboard = () => {
             <li>1) 到「設備管理」管理設備。</li>
             <li>2) 在「搬遷前/後」把設備拖到機櫃；已放置設備也可拖曳調整位置（含 U 重疊檢查）。</li>
             <li>3) 點機櫃內設備可看詳細；在「搬遷後」可即時切換 4 個狀態燈。</li>
-            <li>4) 建議定期用「完整 CSV」做備份/還原。</li>
+            <li>4) 建議定期用「完整 CSV」做備份/還原（不同電腦同步用）。</li>
           </ul>
         </div>
       </div>
@@ -1579,7 +1531,7 @@ function FullCSVImportModal({ onClose }: { onClose: () => void }) {
       >
         <div className="p-6">
           <div className="flex items-center justify-between">
-            <div className="text-xl font-black">完整 CSV 還原（含佈局/燈號/顏色）</div>
+            <div className="text-xl font-black">完整 CSV 還原（含佈局/燈號）</div>
             <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5">
               <X />
             </button>
@@ -1659,7 +1611,6 @@ type SortDir = "asc" | "desc";
 
 const DevicesPage = () => {
   const devices = useStore((s) => s.devices);
-  const colors = useStore((s) => s.colors);
   const addDevice = useStore((s) => s.addDevice);
   const updateDevice = useStore((s) => s.updateDevice);
   const deleteDeviceById = useStore((s) => s.deleteDeviceById);
@@ -1685,9 +1636,13 @@ const DevicesPage = () => {
 
   const sorted = useMemo(() => {
     const getBefore = (d: Device) =>
-      d.beforeRackId && d.beforeStartU != null ? `${d.beforeRackId.replace(/^BEF_/, "")}-${d.beforeStartU}` : "";
+      d.beforeRackId && d.beforeStartU != null
+        ? `${d.beforeRackId.replace(/^BEF_/, "")}-${d.beforeStartU}`
+        : "";
     const getAfter = (d: Device) =>
-      d.afterRackId && d.afterStartU != null ? `${d.afterRackId.replace(/^AFT_/, "")}-${d.afterStartU}` : "";
+      d.afterRackId && d.afterStartU != null
+        ? `${d.afterRackId.replace(/^AFT_/, "")}-${d.afterStartU}`
+        : "";
     const getMigScore = (d: Device) =>
       (d.migration.racked ? 1 : 0) +
       (d.migration.cabled ? 1 : 0) +
@@ -1792,7 +1747,7 @@ const DevicesPage = () => {
           <p className="text-[var(--muted)] text-sm">
             {allowManage
               ? "新增/編輯/刪除設備；刪除會同步移除搬遷前與搬遷後機櫃配置。"
-              : "你目前為 Vendor 權限：可查看、可匯出完整 CSV、可切換搬遷後燈號，但不能調整機櫃佈局/新增/刪除/匯入/修改顏色。"}
+              : "Vendor 權限：可查看、可匯出完整 CSV、可切換搬遷後燈號，但不能調整機櫃佈局/新增/刪除/匯入。"}
           </p>
         </div>
 
@@ -1807,7 +1762,7 @@ const DevicesPage = () => {
           )}
 
           <button
-            onClick={() => canExportCSV(role) && downloadFullCSV(devices, colors)}
+            onClick={() => canExportCSV(role) && downloadFullCSV(devices)}
             className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-white/5 flex items-center gap-2"
           >
             <Download size={16} /> 完整CSV備份
@@ -1863,7 +1818,7 @@ const DevicesPage = () => {
                       style={{
                         color: "var(--onColor)",
                         borderColor: "rgba(255,255,255,0.35)",
-                        backgroundColor: catColorVar(d.category, colors),
+                        backgroundColor: catColor(d.category),
                       }}
                     >
                       {d.category}
@@ -1876,7 +1831,7 @@ const DevicesPage = () => {
 
                   <td className="px-4 py-4 whitespace-nowrap">
                     <button
-                      onClick={() => setSelectedDeviceId(d.id)}
+                      onClick={() => useStore.getState().setSelectedDeviceId(d.id)}
                       className="text-sm text-[var(--muted)] hover:text-[var(--accent)] font-semibold whitespace-nowrap"
                       title="查看詳細"
                     >
@@ -2028,10 +1983,7 @@ function HoverCard({
   afterPos: string;
 }) {
   return (
-    <div
-      className="fixed z-[80] pointer-events-none"
-      style={{ left: x + 12, top: y + 12 }}
-    >
+    <div className="fixed z-[80] pointer-events-none" style={{ left: x + 12, top: y + 12 }}>
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl w-[320px] p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -2066,7 +2018,7 @@ function HoverCard({
 }
 
 /* -----------------------------
-  Unplaced Panel (no legend inside)
+  Unplaced Panel
 ----------------------------- */
 
 function UnplacedPanel({
@@ -2156,90 +2108,6 @@ function UnplacedPanel({
 }
 
 /* -----------------------------
-  Color Picker Bar (Admin only)
------------------------------ */
-
-function ColorTuner({
-  disabled,
-}: {
-  disabled: boolean;
-}) {
-  const colors = useStore((s) => s.colors);
-  const setColors = useStore((s) => s.setColors);
-
-  const Item = ({
-    label,
-    value,
-    onChange,
-  }: {
-    label: string;
-    value: string;
-    onChange: (v: string) => void;
-  }) => (
-    <div className={`flex items-center gap-2 ${disabled ? "opacity-60" : ""}`}>
-      <button
-        disabled={disabled}
-        className={`w-6 h-6 rounded-lg border border-white/20 ${
-          disabled ? "cursor-not-allowed" : "cursor-pointer"
-        }`}
-        style={{ background: value }}
-        title={disabled ? "Vendor 不可修改" : "點選調整顏色"}
-        onClick={(e) => {
-          // click forwarded to hidden input via label wrapper below
-          e.preventDefault();
-        }}
-      />
-      <div className="text-xs text-[var(--muted)] whitespace-nowrap">{label}</div>
-      <input
-        disabled={disabled}
-        type="color"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`h-7 w-9 bg-transparent border border-[var(--border)] rounded-lg ${
-          disabled ? "cursor-not-allowed" : "cursor-pointer"
-        }`}
-        title={disabled ? "Vendor 不可修改" : "RGB 調色盤"}
-      />
-    </div>
-  );
-
-  return (
-    <div className="flex flex-wrap items-center gap-3 justify-end">
-      <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
-        <SlidersHorizontal size={14} />
-        顏色
-      </div>
-      <Item
-        label="Network"
-        value={colors.catNetwork}
-        onChange={(v) => setColors({ catNetwork: v })}
-      />
-      <Item
-        label="Server"
-        value={colors.catServer}
-        onChange={(v) => setColors({ catServer: v })}
-      />
-      <Item
-        label="Storage"
-        value={colors.catStorage}
-        onChange={(v) => setColors({ catStorage: v })}
-      />
-      <Item
-        label="Other"
-        value={colors.catOther}
-        onChange={(v) => setColors({ catOther: v })}
-      />
-      <div className="w-px h-6 bg-[var(--border)] mx-1" />
-      <Item
-        label="文字"
-        value={colors.rackText}
-        onChange={(v) => setColors({ rackText: v })}
-      />
-    </div>
-  );
-}
-
-/* -----------------------------
   Add & Place Modal (Admin)
 ----------------------------- */
 
@@ -2304,7 +2172,7 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
   const setUi = useStore((s) => s.setUi);
   const repairRackIds = useStore((s) => s.repairRackIds);
   const role = useStore((s) => s.role);
-  const colors = useStore((s) => s.colors);
+  const theme = useStore((s) => s.theme);
 
   const allowLayout = canManageAssets(role);
 
@@ -2370,7 +2238,6 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
         return as - bs;
       });
 
-  // ✅ 更緊湊
   const U_H = 20;
 
   const getBlockStyle = (d: Device) => {
@@ -2408,7 +2275,6 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
       setSelectedDeviceId(found.id);
       return;
     }
-    // empty
     if (role === "admin") setAddPlace({ rackId, u });
   };
 
@@ -2425,9 +2291,6 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
               : "Vendor：只能查看（不可拖放/不可調整機櫃佈局），但可在搬遷後切換燈號"}
           </p>
         </div>
-
-        {/* ✅ 顏色調整：Admin only；保存到 localStorage，其他帳號會看到 */}
-        <ColorTuner disabled={role !== "admin"} />
       </div>
 
       <UnplacedPanel
@@ -2450,7 +2313,6 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                 key={rack.id}
                 className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden"
               >
-                {/* ✅ 機櫃編號字體加大、換字重 */}
                 <div
                   className="bg-black/30 text-center py-2 border-b border-[var(--border)]"
                   style={{
@@ -2461,17 +2323,13 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                       mode === "after" && isNoMoveRack(rack.name)
                         ? "rgb(255,0,0)"
                         : "var(--accent)",
-                    fontFamily:
-                      'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif',
                   }}
                 >
                   {rack.name}
                 </div>
 
-                {/* ✅ 更緊湊 padding */}
                 <div className="p-2">
                   <div className="flex gap-2">
-                    {/* U numbers */}
                     <div className="relative">
                       <div className="relative flex flex-col-reverse">
                         {Array.from({ length: 42 }).map((_, i) => {
@@ -2489,7 +2347,6 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                       </div>
                     </div>
 
-                    {/* rack grid */}
                     <div
                       className="relative flex-1 border border-[var(--border)] bg-black/20 rounded-xl overflow-hidden"
                       style={{ height: 42 * U_H }}
@@ -2527,11 +2384,9 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                         })}
                       </div>
 
-                      {/* blocks */}
                       {listForRack(rack.id).map((d) => {
                         const { bottom, height, start, end } = getBlockStyle(d);
-                        const catColor = catColorVar(d.category, colors);
-                        const is1U = (end - start + 1) === 1;
+                        const is1U = end - start + 1 === 1;
 
                         const beforePos =
                           d.beforeRackId && d.beforeStartU != null && d.beforeEndU != null
@@ -2541,6 +2396,8 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                           d.afterRackId && d.afterStartU != null && d.afterEndU != null
                             ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U`
                             : "-";
+
+                        const txtColor = rackTextColor(theme);
 
                         return (
                           <div
@@ -2558,9 +2415,9 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                             style={{
                               bottom,
                               height,
-                              backgroundColor: catColor,
+                              backgroundColor: catColor(d.category),
                               cursor: allowLayout ? "grab" : "pointer",
-                              borderRadius: 8, // ✅ 小圓角
+                              borderRadius: 8,
                               boxShadow:
                                 hover?.id === d.id
                                   ? "0 0 0 2px rgba(255,255,255,0.35), 0 0 22px rgba(0,0,0,0.28)"
@@ -2583,13 +2440,12 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                                 </button>
                               )}
 
-                              {/* ✅ 文字不要被燈號擋住：右下燈號區保留 padding */}
                               <div className="pr-10">
                                 {is1U ? (
                                   <div
                                     className="font-black truncate"
                                     style={{
-                                      color: colors.rackText,
+                                      color: txtColor,
                                       fontSize: "clamp(9px, 0.75vw + 4px, 12px)",
                                       lineHeight: "1.15",
                                       marginTop: 2,
@@ -2603,7 +2459,7 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                                     <div
                                       className="font-black truncate"
                                       style={{
-                                        color: colors.rackText,
+                                        color: txtColor,
                                         fontSize: "clamp(10px, 0.9vw, 13px)",
                                         lineHeight: "1.15",
                                       }}
@@ -2613,7 +2469,7 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                                     <div
                                       className="font-bold truncate"
                                       style={{
-                                        color: colors.rackText,
+                                        color: txtColor,
                                         opacity: 0.95,
                                         fontSize: "clamp(10px, 0.85vw, 12px)",
                                         lineHeight: "1.15",
@@ -2631,7 +2487,6 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                               </div>
                             </div>
 
-                            {/* hover card */}
                             {hover?.id === d.id && (
                               <HoverCard x={hover.x} y={hover.y} d={d} beforePos={beforePos} afterPos={afterPos} />
                             )}
@@ -2871,7 +2726,7 @@ const AdminPage = () => {
         </div>
 
         <div className="mt-4 text-xs text-[var(--muted)]">
-          新增帳號可選 Admin / Vendor；Vendor 只能查看（不可拖放/不可新增刪除匯入/不可改顏色），但可切換搬遷後燈號。
+          Vendor：只能查看（不可拖放/不可新增刪除匯入），但可切換搬遷後燈號。不同電腦同步請用完整 CSV。
         </div>
       </div>
 
