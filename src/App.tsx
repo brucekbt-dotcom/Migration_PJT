@@ -127,10 +127,10 @@ const LS = {
 ----------------------------- */
 
 const FIXED_COLORS = {
-  Network: "#22c55e", // green
-  Server: "#60a5fa", // blue
-  Storage: "#a78bfa", // purple
-  Other: "#f59e0b", // amber
+  Network: "#3b82f6", // blue-500
+  Server: "#475569", // slate-600
+  Storage: "#6366f1", // indigo-500
+  Other: "#fb923c", // orange-400
   rackText: "#0b1220",
   rackTextDark: "#f8fafc",
 };
@@ -239,13 +239,13 @@ const mockDevices: Device[] = [
     brand: "Dell",
     model: "R740",
     ports: 24,
-    sizeU: 1,
+    sizeU: 2,
     ip: "10.0.1.12",
     serial: "",
     portMap: "",
     beforeRackId: "BEF_01",
     beforeStartU: 10,
-    beforeEndU: 10,
+    beforeEndU: 11,
     migration: { racked: false, cabled: false, powered: false, tested: false },
   },
 ];
@@ -371,27 +371,27 @@ const ThemeTokens = () => {
   const presets: Record<ThemeStyle, { light: string; dark: string }> = {
     neon: {
       light:
-        ":root{--bg:#f8fafc;--panel:#ffffff;--panel2:#f1f5f9;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;--accent:#0ea5e9;--accent2:#8b5cf6;--rack-bg:#1e293b;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
+        ":root{--bg:#f8fafc;--panel:#ffffff;--panel2:#f1f5f9;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;--accent:#0ea5e9;--accent2:#8b5cf6;--rack-bg:#1e293b;--onColor:#ffffff;}",
       dark:
-        "html.dark{--bg:#020617;--panel:#0f172a;--panel2:#1e293b;--text:#f1f5f9;--muted:#94a3b8;--border:#334155;--accent:#38bdf8;--accent2:#a78bfa;--rack-bg:#000000;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
+        "html.dark{--bg:#020617;--panel:#0f172a;--panel2:#1e293b;--text:#f1f5f9;--muted:#94a3b8;--border:#334155;--accent:#38bdf8;--accent2:#a78bfa;--rack-bg:#000000;--onColor:#ffffff;}",
     },
     horizon: {
       light:
-        ":root{--bg:#f6f9ff;--panel:#ffffff;--panel2:#eef3ff;--text:#0a1020;--muted:#5b6478;--border:#e6ebff;--accent:#2563eb;--accent2:#14b8a6;--rack-bg:#1e293b;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
+        ":root{--bg:#f6f9ff;--panel:#ffffff;--panel2:#eef3ff;--text:#0a1020;--muted:#5b6478;--border:#e6ebff;--accent:#2563eb;--accent2:#14b8a6;--rack-bg:#1e293b;--onColor:#ffffff;}",
       dark:
-        "html.dark{--bg:#070a14;--panel:#0b1020;--panel2:#101a33;--text:#f1f5f9;--muted:#9aa4b2;--border:#1a2550;--accent:#60a5fa;--accent2:#2dd4bf;--rack-bg:#000000;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
+        "html.dark{--bg:#070a14;--panel:#0b1020;--panel2:#101a33;--text:#f1f5f9;--muted:#9aa4b2;--border:#1a2550;--accent:#60a5fa;--accent2:#2dd4bf;--rack-bg:#000000;--onColor:#ffffff;}",
     },
     nebula: {
       light:
-        ":root{--bg:#fbf7ff;--panel:#ffffff;--panel2:#f6edff;--text:#140a20;--muted:#6b5b7a;--border:#f0e1ff;--accent:#7c3aed;--accent2:#ec4899;--rack-bg:#1e293b;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
+        ":root{--bg:#fbf7ff;--panel:#ffffff;--panel2:#f6edff;--text:#140a20;--muted:#6b5b7a;--border:#f0e1ff;--accent:#7c3aed;--accent2:#ec4899;--rack-bg:#1e293b;--onColor:#ffffff;}",
       dark:
-        "html.dark{--bg:#080614;--panel:#0f0b1f;--panel2:#1a1233;--text:#f8fafc;--muted:#a7a1b2;--border:#2a1f4d;--accent:#a78bfa;--accent2:#fb7185;--rack-bg:#000000;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
+        "html.dark{--bg:#080614;--panel:#0f0b1f;--panel2:#1a1233;--text:#f8fafc;--muted:#a7a1b2;--border:#2a1f4d;--accent:#a78bfa;--accent2:#fb7185;--rack-bg:#000000;--onColor:#ffffff;}",
     },
     matrix: {
       light:
-        ":root{--bg:#f7fbf9;--panel:#ffffff;--panel2:#edf7f2;--text:#07140f;--muted:#5a6b63;--border:#dff2e8;--accent:#10b981;--accent2:#06b6d4;--rack-bg:#1e293b;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
+        ":root{--bg:#f7fbf9;--panel:#ffffff;--panel2:#edf7f2;--text:#07140f;--muted:#5a6b63;--border:#dff2e8;--accent:#10b981;--accent2:#06b6d4;--rack-bg:#1e293b;--onColor:#ffffff;}",
       dark:
-        "html.dark{--bg:#050c09;--panel:#0a1410;--panel2:#0f1f18;--text:#eafff6;--muted:#9bb7ab;--border:#153026;--accent:#34d399;--accent2:#22d3ee;--rack-bg:#000000;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
+        "html.dark{--bg:#050c09;--panel:#0a1410;--panel2:#0f1f18;--text:#eafff6;--muted:#9bb7ab;--border:#153026;--accent:#34d399;--accent2:#22d3ee;--rack-bg:#000000;--onColor:#ffffff;}",
     },
   };
 
@@ -1986,11 +1986,11 @@ function HoverCard({
 }) {
   return (
     <div className="fixed z-[80] pointer-events-none" style={{ left: x + 12, top: y + 12 }}>
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl w-[320px] p-3">
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl w-[320px] p-3 text-left">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="text-xs text-[var(--muted)]">設備</div>
-            <div className="font-black text-sm truncate">{d.deviceId} · {d.name}</div>
+            <div className="font-black text-sm truncate text-[var(--text)]">{d.deviceId} · {d.name}</div>
             <div className="text-xs text-[var(--muted)] truncate">
               {d.brand} / {d.model} · {d.sizeU}U · {d.ports} ports
             </div>
@@ -2003,11 +2003,11 @@ function HoverCard({
         <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
           <div className="rounded-xl border border-[var(--border)] bg-[var(--panel2)] p-2">
             <div className="text-[10px] text-[var(--muted)]">搬遷前</div>
-            <div className="font-bold truncate">{beforePos}</div>
+            <div className="font-bold truncate text-[var(--text)]">{beforePos}</div>
           </div>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--panel2)] p-2">
             <div className="text-[10px] text-[var(--muted)]">搬遷後</div>
-            <div className="font-bold truncate">{afterPos}</div>
+            <div className="font-bold truncate text-[var(--text)]">{afterPos}</div>
           </div>
         </div>
 
@@ -2042,7 +2042,7 @@ function UnplacedPanel({
   }, [unplaced.length]);
 
   return (
-    <div className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
+    <div className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden mb-6">
       <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="font-black">未放置設備</div>
@@ -2159,7 +2159,7 @@ function AddAndPlaceModal({
 }
 
 /* -----------------------------
-  Rack Planner
+  Rack Planner (NEW REDESIGN)
 ----------------------------- */
 
 const isNoMoveRack = (name: string) => name.startsWith("不搬存放區");
@@ -2239,7 +2239,8 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
         return as - bs;
       });
 
-  const U_H = 20;
+  // 修改了 U 的高度，適應 Tailwind h-8 (32px)
+  const U_H = 32;
 
   const getBlockStyle = (d: Device) => {
     const sU = (mode === "before" ? d.beforeStartU : d.afterStartU) ?? 1;
@@ -2282,11 +2283,14 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
   const title = mode === "before" ? "搬遷前 機櫃佈局" : "搬遷後 機櫃佈局";
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h2 className="text-2xl font-black text-[var(--accent)]">{title}</h2>
-          <p className="text-[var(--muted)] text-sm">
+          <h2 className="text-2xl font-black flex items-center gap-3 text-slate-900 dark:text-[var(--text)]">
+            <ArrowRightLeft className="text-indigo-600 dark:text-[var(--accent)]" />
+            {title}
+          </h2>
+          <p className="text-[var(--muted)] text-sm font-medium mt-1">
             {allowLayout
               ? "拖拉設備到機櫃；已放置設備也可再拖拉調整位置（含 U 重疊檢查）"
               : "Vendor：只能查看（不可拖放/不可調整機櫃佈局），但可在搬遷後切換燈號"}
@@ -2302,172 +2306,140 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
         allowLayout={allowLayout}
       />
 
-      <div className="space-y-5">
+      <div className="space-y-6">
         {rackRows.map((row, idx) => (
           <div
             key={idx}
-            className="grid gap-4"
+            className="grid gap-6"
             style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}
           >
             {row.map((rack) => (
               <div
                 key={rack.id}
-                className="relative bg-[#1a1a1a] p-3 rounded-t-xl border-x-[6px] border-t-[6px] border-[#333] shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+                className="flex flex-col bg-[var(--panel)] rounded-xl shadow-lg border border-[var(--border)] overflow-hidden"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-transparent to-black/20 pointer-events-none rounded-t-lg" />
-
-                <div className="relative mb-3 py-1 bg-black/60 rounded border border-white/10 text-center z-10 shadow-inner">
-                  <span
-                    className="font-black tracking-widest uppercase text-sm"
-                    style={{
-                      color: mode === "after" && isNoMoveRack(rack.name) ? "rgb(255,80,80)" : "var(--accent)"
-                    }}
-                  >
+                {/* 機櫃標題列：動態變色 */}
+                <div
+                  className={`p-4 ${
+                    mode === "after" && isNoMoveRack(rack.name)
+                      ? "bg-red-800"
+                      : mode === "after"
+                      ? "bg-emerald-600"
+                      : "bg-slate-800"
+                  } text-white flex justify-between items-center`}
+                >
+                  <h2 className="font-bold text-base flex items-center gap-2 truncate text-white">
+                    <Server size={18} />
                     {rack.name}
+                  </h2>
+                  <span className="text-[10px] bg-white/20 px-2 py-1 rounded whitespace-nowrap text-white">
+                    42U
                   </span>
                 </div>
 
-                <div
-                  className="relative bg-black/80 rounded-lg border border-white/5 p-1 shadow-inner z-10 mx-auto"
-                  style={{ height: 42 * U_H }}
-                >
-                  {/* 機櫃內側左邊 U 數刻度 */}
-                  <div className="absolute -left-6 inset-y-0 flex flex-col-reverse justify-between py-[2px] opacity-40 w-5">
-                    {Array.from({ length: 42 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="text-[9px] font-mono text-right leading-none flex items-center justify-end"
-                        style={{ height: U_H }}
-                      >
-                        {i + 1}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="relative w-full h-full">
-                    {/* U 格子 (拖放目標) */}
+                {/* 機櫃本體與刻度區域 */}
+                <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 bg-slate-100 dark:bg-black/20 flex justify-center">
+                  {/* Rack Frame */}
+                  <div
+                    className="relative w-full min-w-[200px] max-w-md border-x-[12px] border-t-[12px] border-slate-400 dark:border-slate-600 bg-slate-900 rounded-t-lg shadow-inner mb-4"
+                    style={{ height: 42 * U_H }}
+                  >
+                    
+                    {/* U 位背景格線 & 左側數字標籤 */}
                     <div className="absolute inset-0 flex flex-col-reverse">
                       {Array.from({ length: 42 }).map((_, i) => {
                         const u = i + 1;
-                        const thick = u % 5 === 0;
                         return (
                           <div
                             key={u}
+                            className="flex w-full border-b border-slate-800 group relative"
+                            style={{ height: U_H }}
                             onDragOver={(e) => allowLayout && e.preventDefault()}
                             onDrop={(e) => onDrop(e, rack.id, u)}
                             onClick={() => onCellClick(rack.id, u)}
-                            className="relative cursor-pointer"
-                            style={{ height: U_H }}
-                            title={
-                              role === "admin"
-                                ? "點格子：有設備=開詳細；空格=新增並放置"
-                                : "點格子：有設備=開詳細"
-                            }
                           >
-                            <div
-                              className="absolute inset-x-0 top-0 pointer-events-none"
-                              style={{
-                                height: thick ? 2 : 1,
-                                background: thick
-                                  ? "rgba(255,255,255,0.35)"
-                                  : "rgba(255,255,255,0.15)",
-                              }}
-                            />
-                            <div className="absolute inset-0 hover:bg-white/[0.06]" />
+                            {/* 左側 U-Number (黃色背景) */}
+                            <div className="w-10 sm:w-12 flex items-center justify-center bg-yellow-400 text-slate-900 font-black text-[10px] sm:text-xs border-r border-slate-800 shadow-sm z-0">
+                              {u}U
+                            </div>
+
+                            {/* 右側：空槽區域 (允許點擊與拖放) */}
+                            <div className="flex-1 relative flex items-center justify-center hover:bg-white/[0.05] transition-colors cursor-pointer">
+                              <div className="w-full h-[1px] bg-white/10 mx-3 pointer-events-none"></div>
+                            </div>
                           </div>
                         );
                       })}
                     </div>
 
-                    {/* 已放置的設備 */}
-                    {listForRack(rack.id).map((d) => {
-                      const { bottom, height } = getBlockStyle(d);
+                    {/* 設備絕對定位層 (Overlay) */}
+                    <div className="absolute inset-y-0 right-0 left-10 sm:left-12 pointer-events-none z-10">
+                      {listForRack(rack.id).map((d) => {
+                        const { bottom, height } = getBlockStyle(d);
+                        const isHovered = hover?.id === d.id;
+                        
+                        const beforePos =
+                          d.beforeRackId && d.beforeStartU != null && d.beforeEndU != null
+                            ? `${d.beforeRackId.replace(/^BEF_/, "")} ${d.beforeStartU}-${d.beforeEndU}U`
+                            : "-";
+                        const afterPos =
+                          d.afterRackId && d.afterStartU != null && d.afterEndU != null
+                            ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U`
+                            : "-";
 
-                      const beforePos =
-                        d.beforeRackId && d.beforeStartU != null && d.beforeEndU != null
-                          ? `${d.beforeRackId.replace(/^BEF_/, "")} ${d.beforeStartU}-${d.beforeEndU}U`
-                          : "-";
-                      const afterPos =
-                        d.afterRackId && d.afterStartU != null && d.afterEndU != null
-                          ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U`
-                          : "-";
+                        return (
+                          <div
+                            key={d.id}
+                            draggable={allowLayout}
+                            onDragStart={(ev) => {
+                              if (!allowLayout) return;
+                              ev.dataTransfer.setData("text/plain", d.id);
+                              ev.dataTransfer.effectAllowed = "move";
+                            }}
+                            onClick={() => setSelectedDeviceId(d.id)}
+                            onMouseMove={(e) => setHover({ id: d.id, x: e.clientX, y: e.clientY })}
+                            onMouseLeave={() => setHover(null)}
+                            className={`absolute left-2 right-2 rounded flex flex-row items-center px-2 sm:px-3 text-[10px] sm:text-xs text-white font-bold shadow-md transition-all pointer-events-auto ${
+                              isHovered ? "brightness-110 scale-[1.02] z-20" : "z-10"
+                            }`}
+                            style={{
+                              bottom: bottom + 2, // 置中留白
+                              height: height - 4, // 縮減高度留出設備間隙
+                              backgroundColor: catColor(d.category),
+                              cursor: allowLayout ? "grab" : "pointer",
+                            }}
+                            title="點擊開啟設備詳細"
+                          >
+                            <div className="flex-1 truncate pointer-events-none drop-shadow-md">
+                              {d.deviceId} | {d.name}
+                            </div>
+                            
+                            {/* 狀態燈號 */}
+                            <div className="ml-1 sm:ml-2 flex items-center bg-black/30 px-1 py-0.5 rounded shadow-inner pointer-events-none scale-[0.7] sm:scale-100 origin-right">
+                              <LampsRow m={d.migration} />
+                            </div>
 
-                      const isHovered = hover?.id === d.id;
-
-                      return (
-                        <div
-                          key={d.id}
-                          draggable={allowLayout}
-                          onDragStart={(ev) => {
-                            if (!allowLayout) return;
-                            ev.dataTransfer.setData("text/plain", d.id);
-                            ev.dataTransfer.effectAllowed = "move";
-                          }}
-                          onClick={() => setSelectedDeviceId(d.id)}
-                          onMouseMove={(e) => setHover({ id: d.id, x: e.clientX, y: e.clientY })}
-                          onMouseLeave={() => setHover(null)}
-                          className={`absolute left-1 right-1 border-t border-l border-white/20 rounded-sm shadow-lg transition-all ${
-                            isHovered ? "brightness-125 scale-[1.02] z-20" : "z-10"
-                          }`}
-                          style={{
-                            bottom,
-                            height: height - 1, // 微小的間隙模擬實體感
-                            backgroundColor: catColor(d.category),
-                            backgroundImage:
-                              "linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(0,0,0,0.25) 100%)",
-                            boxShadow: isHovered
-                              ? "0 0 15px rgba(56,189,248,0.5)"
-                              : "inset 0 1px 1px rgba(255,255,255,0.2)",
-                            cursor: allowLayout ? "grab" : "pointer",
-                          }}
-                          title="點擊開啟設備詳細"
-                        >
-                          {/* 模擬伺服器兩側的固定螺絲 */}
-                          <div className="absolute left-1 top-1 w-1 h-1 rounded-full bg-black/50 shadow-inner" />
-                          <div className="absolute left-1 bottom-1 w-1 h-1 rounded-full bg-black/50 shadow-inner" />
-
-                          <div className="h-full w-full px-3 py-0.5 flex items-center justify-between">
+                            {/* 移除按鈕 (Hover時顯示) */}
                             {allowLayout && isHovered && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   clearPlacement(mode, d.id);
                                 }}
-                                className="absolute -top-2 -right-2 p-1 rounded-full bg-red-500/90 text-white shadow-lg hover:bg-red-500 z-30"
-                                title="清除位置"
+                                className="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center rounded-full bg-red-500 text-white shadow-lg hover:bg-red-400 z-30 pointer-events-auto"
                               >
                                 <X size={12} />
                               </button>
                             )}
 
-                            <div className="flex flex-col min-w-0 pr-6 overflow-hidden pointer-events-none">
-                              <span
-                                className="font-mono text-[10px] font-bold tracking-tighter truncate"
-                                style={{ color: "var(--onColor)", textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
-                              >
-                                {d.deviceId}
-                              </span>
-                              {height > 25 && (
-                                <span
-                                  className="text-[9px] opacity-90 truncate"
-                                  style={{ color: "var(--onColor)" }}
-                                >
-                                  {d.name}
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="absolute right-1 flex items-center bg-black/40 px-1 py-0.5 rounded-full scale-[0.85] shadow-inner">
-                              <LampsRow m={d.migration} />
-                            </div>
+                            {isHovered && <HoverCard x={hover.x} y={hover.y} d={d} beforePos={beforePos} afterPos={afterPos} />}
                           </div>
+                        );
+                      })}
+                    </div>
 
-                          {isHovered && (
-                            <HoverCard x={hover.x} y={hover.y} d={d} beforePos={beforePos} afterPos={afterPos} />
-                          )}
-                        </div>
-                      );
-                    })}
+                    {/* 機櫃底部底座 */}
+                    <div className="absolute -bottom-4 left-[-12px] right-[-12px] h-4 bg-slate-500 dark:bg-slate-700 rounded-b-sm shadow-md"></div>
                   </div>
                 </div>
               </div>
