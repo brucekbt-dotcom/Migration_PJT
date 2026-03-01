@@ -1968,7 +1968,7 @@ const DevicesPage = () => {
 };
 
 /* -----------------------------
-  Hover Card (tooltip)
+  Hover Card (tooltip) - Glassmorphism
 ----------------------------- */
 
 function HoverCard({
@@ -1985,13 +1985,13 @@ function HoverCard({
   afterPos: string;
 }) {
   return (
-    <div className="fixed z-[80] pointer-events-none" style={{ left: x + 12, top: y + 12 }}>
+    <div className="fixed z-[9999] pointer-events-none" style={{ left: x + 16, top: y + 16 }}>
       {/* 玻璃模糊特效 (Glassmorphism) 卡片 */}
-      <div className="rounded-2xl border border-white/20 bg-black/60 dark:bg-[#0f172a]/70 backdrop-blur-xl shadow-2xl w-[320px] p-4 text-left text-white">
+      <div className="rounded-2xl border border-white/20 bg-slate-900/60 dark:bg-black/60 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] w-[320px] p-4 text-left text-white">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-[10px] text-gray-300 font-medium">設備</div>
-            <div className="font-black text-sm truncate">{d.deviceId} · {d.name}</div>
+            <div className="text-[10px] text-gray-300 font-medium">設備資訊</div>
+            <div className="font-black text-sm truncate text-white">{d.deviceId} · {d.name}</div>
             <div className="text-[11px] text-gray-300 truncate mt-0.5">
               {d.brand} / {d.model} · {d.sizeU}U · {d.ports} ports
             </div>
@@ -2002,13 +2002,13 @@ function HoverCard({
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-2">
+          <div className="rounded-xl border border-white/10 bg-white/10 p-2">
             <div className="text-[10px] text-gray-400">搬遷前</div>
-            <div className="font-bold truncate">{beforePos}</div>
+            <div className="font-bold truncate text-white">{beforePos}</div>
           </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 p-2">
+          <div className="rounded-xl border border-white/10 bg-white/10 p-2">
             <div className="text-[10px] text-gray-400">搬遷後</div>
-            <div className="font-bold truncate">{afterPos}</div>
+            <div className="font-bold truncate text-white">{afterPos}</div>
           </div>
         </div>
 
@@ -2077,20 +2077,25 @@ function UnplacedPanel({
                     ev.dataTransfer.setData("text/plain", d.id);
                     ev.dataTransfer.effectAllowed = "move";
                   }}
-                  className={`min-w-[260px] p-3 rounded-2xl border border-[var(--border)] hover:bg-white/[0.03] ${
-                    allowLayout ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-90"
+                  className={`min-w-[240px] p-3 rounded-xl shadow-md border border-white/10 transition-all ${
+                    allowLayout ? "cursor-grab active:cursor-grabbing hover:brightness-110 hover:scale-[1.02]" : "cursor-not-allowed opacity-90"
                   }`}
+                  style={{
+                    backgroundColor: catColor(d.category),
+                    backgroundImage: "linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0.15) 100%)",
+                    color: "white"
+                  }}
                   title={allowLayout ? "拖曳到機櫃" : "Vendor 不允許拖放"}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-black text-[var(--text)] truncate">{d.deviceId}</div>
-                      <div className="text-xs text-[var(--muted)] truncate">{d.name}</div>
-                      <div className="text-xs text-[var(--muted)] mt-1 truncate">
+                      <div className="text-sm font-black truncate drop-shadow-md">{d.deviceId}</div>
+                      <div className="text-xs font-semibold opacity-90 truncate drop-shadow-sm mt-0.5">{d.name}</div>
+                      <div className="text-[10px] opacity-80 mt-1.5 truncate drop-shadow-sm">
                         {d.brand} · {d.model} · {d.sizeU}U
                       </div>
                     </div>
-                    <div className="pt-1">
+                    <div className="pt-1 bg-black/20 p-1 rounded-md shadow-inner">
                       <LampsRow m={d.migration} />
                     </div>
                   </div>
@@ -2178,7 +2183,11 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
 
   const allowLayout = canManageAssets(role);
 
-  const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null);
+  // 用於毛玻璃卡片的全局狀態
+  type HoverInfo = { x: number; y: number; d: Device; beforePos: string; afterPos: string };
+  const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  
   const [addPlace, setAddPlace] = useState<{ rackId: string; u: number } | null>(null);
 
   useEffect(() => {
@@ -2240,13 +2249,16 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
         return as - bs;
       });
 
-  const U_H = 32;
+  // 縮小 1~42U 的間距，讓機櫃在畫面中不要太高
+  const U_H = 20;
 
   const getBlockStyle = (d: Device) => {
     const sU = (mode === "before" ? d.beforeStartU : d.afterStartU) ?? 1;
     const eU = (mode === "before" ? d.beforeEndU : d.afterEndU) ?? sU;
     const start = clampU(Math.min(sU, eU));
     const end = clampU(Math.max(sU, eU));
+    
+    // 嚴格依照網格線高計算位置
     const height = (end - start + 1) * U_H;
     const bottom = (start - 1) * U_H;
     return { bottom, height, start, end };
@@ -2283,11 +2295,11 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
   const title = mode === "before" ? "搬遷前 機櫃佈局" : "搬遷後 機櫃佈局";
 
   return (
-    <div className="p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+    <div className="p-6 relative">
+      <div className="flex flex-wrap items-start md:items-center justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-2xl font-black flex items-center gap-3 text-slate-900 dark:text-[var(--text)]">
-            <ArrowRightLeft className="text-indigo-600 dark:text-[var(--accent)]" />
+          <h2 className="text-2xl font-black flex items-center gap-3 text-[var(--text)]">
+            <ArrowRightLeft className="text-[var(--accent)]" />
             {title}
           </h2>
           <p className="text-[var(--muted)] text-sm font-medium mt-1">
@@ -2295,6 +2307,14 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
               ? "拖拉設備到機櫃；已放置設備也可再拖拉調整位置（含 U 重疊檢查）"
               : "Vendor：只能查看（不可拖放/不可調整機櫃佈局），但可在搬遷後切換燈號"}
           </p>
+        </div>
+        
+        {/* 類別顏色圖例 */}
+        <div className="flex gap-3 bg-[var(--panel)] p-2.5 rounded-xl border border-[var(--border)] shadow-sm text-xs font-bold shrink-0 flex-wrap">
+          <div className="flex items-center gap-1.5"><div className="w-3.5 h-3.5 rounded-sm shadow-inner" style={{ backgroundColor: FIXED_COLORS.Network }}></div> Network</div>
+          <div className="flex items-center gap-1.5"><div className="w-3.5 h-3.5 rounded-sm shadow-inner" style={{ backgroundColor: FIXED_COLORS.Server }}></div> Server</div>
+          <div className="flex items-center gap-1.5"><div className="w-3.5 h-3.5 rounded-sm shadow-inner" style={{ backgroundColor: FIXED_COLORS.Storage }}></div> Storage</div>
+          <div className="flex items-center gap-1.5"><div className="w-3.5 h-3.5 rounded-sm shadow-inner" style={{ backgroundColor: FIXED_COLORS.Other }}></div> Other</div>
         </div>
       </div>
 
@@ -2308,7 +2328,6 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
 
       <div className="space-y-8 overflow-hidden">
         {rackRows.map((row, idx) => (
-          // 使用 flex 與 overflow-x-auto 取代原本會自適應擠壓的 Grid
           <div
             key={idx}
             className="flex gap-6 overflow-x-auto pb-4 items-start snap-x"
@@ -2339,46 +2358,55 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
 
                 {/* 機櫃本體與刻度區域 */}
                 <div className="flex-1 overflow-y-hidden p-4 bg-slate-100 dark:bg-black/20 flex justify-center">
-                  {/* Rack Frame */}
+                  
+                  {/* Rack Frame 容器，固定高度，對齊精準 */}
                   <div
                     className="relative w-full border-x-[12px] border-t-[12px] border-slate-400 dark:border-slate-600 bg-slate-900 rounded-t-lg shadow-inner mb-4"
-                    style={{ height: 42 * U_H }}
+                    style={{ height: 42 * U_H }} 
                   >
                     
-                    {/* U 位背景格線 & 左側數字標籤 */}
-                    <div className="absolute inset-0 flex flex-col-reverse">
+                    {/* 左側 U 數刻度列 (Yellow) */}
+                    <div className="absolute left-0 top-0 bottom-0 w-7 sm:w-8 bg-yellow-400/90 flex flex-col-reverse border-r border-slate-800 z-0">
+                      {Array.from({ length: 42 }).map((_, i) => (
+                        <div 
+                          key={i + 1} 
+                          className="w-full flex items-center justify-center text-slate-900 text-[8px] font-bold" 
+                          style={{ height: U_H }}
+                        >
+                          {i + 1}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 右側 空槽格線區 */}
+                    <div className="absolute left-7 sm:left-8 right-0 top-0 bottom-0 flex flex-col-reverse z-0">
                       {Array.from({ length: 42 }).map((_, i) => {
                         const u = i + 1;
-                        // 每 5U 加粗格線判斷
+                        // 每 5U 加粗上方格線 (flex-col-reverse中，畫在上緣)
                         const isThick = u % 5 === 0;
                         return (
                           <div
                             key={u}
-                            className={`flex w-full group relative ${isThick ? 'border-b-2 border-slate-600/80' : 'border-b border-slate-800'}`}
+                            className={`w-full group relative box-border border-t ${
+                              isThick ? 'border-slate-500 border-t-[2px]' : 'border-slate-700/60'
+                            }`}
                             style={{ height: U_H }}
                             onDragOver={(e) => allowLayout && e.preventDefault()}
                             onDrop={(e) => onDrop(e, rack.id, u)}
                             onClick={() => onCellClick(rack.id, u)}
                           >
-                            {/* 左側 U-Number (縮小且移除粗體) */}
-                            <div className="w-7 sm:w-8 flex flex-shrink-0 items-center justify-center bg-yellow-400 text-slate-900 text-[9px] font-medium shadow-sm z-0">
-                              {u}
-                            </div>
-
-                            {/* 右側：空槽區域 */}
-                            <div className="flex-1 relative flex items-center justify-center hover:bg-white/[0.05] transition-colors cursor-pointer">
-                              <div className={`w-full h-[1px] mx-3 pointer-events-none ${isThick ? 'bg-white/30' : 'bg-white/5'}`}></div>
-                            </div>
+                            {/* Hover 特效 */}
+                            <div className="absolute inset-0 hover:bg-white/[0.05] transition-colors cursor-pointer" />
                           </div>
                         );
                       })}
                     </div>
 
-                    {/* 設備絕對定位層 (Overlay) */}
-                    <div className="absolute inset-y-0 right-0 left-7 sm:left-8 pointer-events-none z-10">
+                    {/* 設備絕對定位層 (Overlay) - 完全精準對齊格線 */}
+                    <div className="absolute left-7 sm:left-8 right-0 top-0 bottom-0 pointer-events-none z-10">
                       {listForRack(rack.id).map((d) => {
                         const { bottom, height } = getBlockStyle(d);
-                        const isHovered = hover?.id === d.id;
+                        const isHovered = hoverId === d.id;
                         
                         const beforePos =
                           d.beforeRackId && d.beforeStartU != null && d.beforeEndU != null
@@ -2399,32 +2427,38 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                               ev.dataTransfer.effectAllowed = "move";
                             }}
                             onClick={() => setSelectedDeviceId(d.id)}
-                            onMouseMove={(e) => setHover({ id: d.id, x: e.clientX, y: e.clientY })}
-                            onMouseLeave={() => setHover(null)}
-                            className={`absolute left-2 right-2 rounded flex flex-row items-center px-2 text-white shadow-md transition-all pointer-events-auto overflow-hidden ${
-                              isHovered ? "brightness-110 scale-[1.02] z-20" : "z-10"
+                            onMouseMove={(e) => {
+                              setHoverId(d.id);
+                              setHoverInfo({ x: e.clientX, y: e.clientY, d, beforePos, afterPos });
+                            }}
+                            onMouseLeave={() => {
+                              setHoverId(null);
+                              setHoverInfo(null);
+                            }}
+                            className={`absolute left-[2px] right-[2px] rounded flex flex-row items-center px-2 text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] transition-all pointer-events-auto overflow-hidden ${
+                              isHovered ? "brightness-125 scale-[1.01] z-20 shadow-[0_0_15px_rgba(56,189,248,0.4)]" : "z-10"
                             }`}
                             style={{
-                              bottom: bottom + 2, // 置中留白
-                              height: height - 4, // 縮減高度留出設備間隙
+                              bottom: bottom + 1,  // 往上 1px，避免蓋到網格線
+                              height: height - 1,  // 縮減 1px，完美置於格子內
                               backgroundColor: catColor(d.category),
+                              backgroundImage: "linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0.2) 100%)",
                               cursor: allowLayout ? "grab" : "pointer",
                             }}
-                            title="點擊開啟設備詳細"
                           >
                             {/* 設備文字內容動態排版 */}
-                            <div className="flex-1 h-full flex flex-col justify-center min-w-0 pr-12 drop-shadow-md">
+                            <div className="flex-1 h-full flex flex-col justify-center min-w-0 pr-14 drop-shadow-md">
                               {d.sizeU >= 2 ? (
                                 <>
-                                  <div className="truncate w-full font-bold text-[10px] sm:text-[11px] leading-tight tracking-wide">
+                                  <div className="truncate w-full font-bold text-[9px] sm:text-[10px] leading-tight tracking-wide">
                                     {d.deviceId} | {d.name}
                                   </div>
-                                  <div className="truncate w-full text-[9px] sm:text-[10px] opacity-90 font-medium leading-tight mt-0.5">
+                                  <div className="truncate w-full text-[8px] sm:text-[9px] opacity-90 font-medium leading-tight mt-0.5">
                                     {d.brand} | {d.model}
                                   </div>
                                 </>
                               ) : (
-                                <div className="truncate w-full font-bold text-[9px] sm:text-[10px] leading-tight">
+                                <div className="truncate w-full font-bold text-[8px] sm:text-[9px] leading-tight">
                                   {d.deviceId} | {d.name} | {d.model}
                                 </div>
                               )}
@@ -2441,14 +2475,14 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   clearPlacement(mode, d.id);
+                                  setHoverId(null);
+                                  setHoverInfo(null);
                                 }}
-                                className="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center rounded-full bg-red-500 text-white shadow-lg hover:bg-red-400 z-30 pointer-events-auto"
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center rounded-full bg-red-500 text-white shadow-lg hover:bg-red-400 z-30 pointer-events-auto scale-75"
                               >
                                 <X size={12} />
                               </button>
                             )}
-
-                            {isHovered && <HoverCard x={hover.x} y={hover.y} d={d} beforePos={beforePos} afterPos={afterPos} />}
                           </div>
                         );
                       })}
@@ -2472,6 +2506,9 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
           onClose={() => setAddPlace(null)}
         />
       )}
+
+      {/* 根節點渲染毛玻璃懸浮卡片 (避免被父層 overflow 裁切) */}
+      {hoverInfo && <HoverCard {...hoverInfo} />}
     </div>
   );
 };
