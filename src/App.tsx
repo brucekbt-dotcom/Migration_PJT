@@ -239,13 +239,13 @@ const mockDevices: Device[] = [
     brand: "Dell",
     model: "R740",
     ports: 24,
-    sizeU: 2,
+    sizeU: 1,
     ip: "10.0.1.12",
     serial: "",
     portMap: "",
     beforeRackId: "BEF_01",
     beforeStartU: 10,
-    beforeEndU: 11,
+    beforeEndU: 10,
     migration: { racked: false, cabled: false, powered: false, tested: false },
   },
 ];
@@ -371,27 +371,27 @@ const ThemeTokens = () => {
   const presets: Record<ThemeStyle, { light: string; dark: string }> = {
     neon: {
       light:
-        ":root{--bg:#f8fafc;--panel:#ffffff;--panel2:#f1f5f9;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;--accent:#0ea5e9;--accent2:#8b5cf6;--rack-bg:#1e293b;--onColor:#ffffff;}",
+        ":root{--bg:#f7fafc;--panel:#ffffff;--panel2:#f1f5f9;--text:#0b1220;--muted:#475569;--border:#e2e8f0;--accent:#06b6d4;--accent2:#a855f7;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
-        "html.dark{--bg:#020617;--panel:#0f172a;--panel2:#1e293b;--text:#f1f5f9;--muted:#94a3b8;--border:#334155;--accent:#38bdf8;--accent2:#a78bfa;--rack-bg:#000000;--onColor:#ffffff;}",
+        "html.dark{--bg:#05070d;--panel:#0b1220;--panel2:#1a2235;--text:#e5e7eb;--muted:#94a3b8;--border:#1e293b;--accent:#22d3ee;--accent2:#c084fc;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
     horizon: {
       light:
-        ":root{--bg:#f6f9ff;--panel:#ffffff;--panel2:#eef3ff;--text:#0a1020;--muted:#5b6478;--border:#e6ebff;--accent:#2563eb;--accent2:#14b8a6;--rack-bg:#1e293b;--onColor:#ffffff;}",
+        ":root{--bg:#f6f9ff;--panel:#ffffff;--panel2:#eef3ff;--text:#0a1020;--muted:#5b6478;--border:#e6ebff;--accent:#2563eb;--accent2:#14b8a6;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
-        "html.dark{--bg:#070a14;--panel:#0b1020;--panel2:#101a33;--text:#f1f5f9;--muted:#9aa4b2;--border:#1a2550;--accent:#60a5fa;--accent2:#2dd4bf;--rack-bg:#000000;--onColor:#ffffff;}",
+        "html.dark{--bg:#070a14;--panel:#0b1020;--panel2:#101a33;--text:#f1f5f9;--muted:#9aa4b2;--border:#1a2550;--accent:#60a5fa;--accent2:#2dd4bf;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
     nebula: {
       light:
-        ":root{--bg:#fbf7ff;--panel:#ffffff;--panel2:#f6edff;--text:#140a20;--muted:#6b5b7a;--border:#f0e1ff;--accent:#7c3aed;--accent2:#ec4899;--rack-bg:#1e293b;--onColor:#ffffff;}",
+        ":root{--bg:#fbf7ff;--panel:#ffffff;--panel2:#f6edff;--text:#140a20;--muted:#6b5b7a;--border:#f0e1ff;--accent:#7c3aed;--accent2:#ec4899;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
-        "html.dark{--bg:#080614;--panel:#0f0b1f;--panel2:#1a1233;--text:#f8fafc;--muted:#a7a1b2;--border:#2a1f4d;--accent:#a78bfa;--accent2:#fb7185;--rack-bg:#000000;--onColor:#ffffff;}",
+        "html.dark{--bg:#080614;--panel:#0f0b1f;--panel2:#1a1233;--text:#f8fafc;--muted:#a7a1b2;--border:#2a1f4d;--accent:#a78bfa;--accent2:#fb7185;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
     matrix: {
       light:
-        ":root{--bg:#f7fbf9;--panel:#ffffff;--panel2:#edf7f2;--text:#07140f;--muted:#5a6b63;--border:#dff2e8;--accent:#10b981;--accent2:#06b6d4;--rack-bg:#1e293b;--onColor:#ffffff;}",
+        ":root{--bg:#f7fbf9;--panel:#ffffff;--panel2:#edf7f2;--text:#07140f;--muted:#5a6b63;--border:#dff2e8;--accent:#10b981;--accent2:#06b6d4;--onColor:#07140f;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
-        "html.dark{--bg:#050c09;--panel:#0a1410;--panel2:#0f1f18;--text:#eafff6;--muted:#9bb7ab;--border:#153026;--accent:#34d399;--accent2:#22d3ee;--rack-bg:#000000;--onColor:#ffffff;}",
+        "html.dark{--bg:#050c09;--panel:#0a1410;--panel2:#0f1f18;--text:#eafff6;--muted:#9bb7ab;--border:#153026;--accent:#34d399;--accent2:#22d3ee;--onColor:#07140f;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
   };
 
@@ -405,6 +405,9 @@ function useApplyTheme() {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
 }
+
+const rackTextColor = (theme: ThemeMode) =>
+  theme === "dark" ? FIXED_COLORS.rackTextDark : FIXED_COLORS.rackText;
 
 const catColor = (cat: DeviceCategory) => {
   switch (cat) {
@@ -425,12 +428,12 @@ const catColor = (cat: DeviceCategory) => {
 
 const Lamp = ({ on }: { on: boolean }) => (
   <span
-    className="inline-block w-1.5 h-1.5 rounded-full"
+    className="inline-block w-2 h-2 rounded-full"
     style={{
       backgroundColor: on ? "rgb(0,255,0)" : "rgb(255,0,0)",
       boxShadow: on
-        ? "0 0 8px rgba(0,255,0,0.9)"
-        : "0 0 8px rgba(255,0,0,0.8)",
+        ? "0 0 10px rgba(0,255,0,0.85)"
+        : "0 0 10px rgba(255,0,0,0.75)",
     }}
   />
 );
@@ -1968,7 +1971,7 @@ const DevicesPage = () => {
 };
 
 /* -----------------------------
-  Hover Card (tooltip) - Glassmorphism
+  Hover Card (tooltip) - Glassmorphism (強制使用 Inline Style 保證毛玻璃生效)
 ----------------------------- */
 
 function HoverCard({
@@ -1986,8 +1989,15 @@ function HoverCard({
 }) {
   return (
     <div className="fixed z-[9999] pointer-events-none" style={{ left: x + 16, top: y + 16 }}>
-      {/* 玻璃模糊特效 (Glassmorphism) 卡片 */}
-      <div className="rounded-2xl border border-white/20 bg-slate-900/60 dark:bg-black/60 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] w-[320px] p-4 text-left text-white">
+      {/* 強制內聯毛玻璃樣式，保證跨環境皆可顯示 */}
+      <div 
+        className="rounded-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.5)] w-[320px] p-4 text-left text-white"
+        style={{
+          backgroundColor: "rgba(15, 23, 42, 0.75)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)" // 支援 Safari
+        }}
+      >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="text-[10px] text-gray-300 font-medium">設備資訊</div>
@@ -2249,18 +2259,21 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
         return as - bs;
       });
 
-  // 縮小 1~42U 的間距，讓機櫃在畫面中不要太高
+  // U_H 設定為 20px (控制機櫃高度不要太長)
   const U_H = 20;
 
+  // 使用純數學計算高度與位置，完全避免 CSS border-box 的擠壓誤差
   const getBlockStyle = (d: Device) => {
     const sU = (mode === "before" ? d.beforeStartU : d.afterStartU) ?? 1;
     const eU = (mode === "before" ? d.beforeEndU : d.afterEndU) ?? sU;
     const start = clampU(Math.min(sU, eU));
     const end = clampU(Math.max(sU, eU));
     
-    // 嚴格依照網格線高計算位置
-    const height = (end - start + 1) * U_H;
+    // 底部位移 (基於絕對座標計算)
     const bottom = (start - 1) * U_H;
+    // 總高度
+    const height = (end - start + 1) * U_H;
+    
     return { bottom, height, start, end };
   };
 
@@ -2359,50 +2372,56 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                 {/* 機櫃本體與刻度區域 */}
                 <div className="flex-1 overflow-y-hidden p-4 bg-slate-100 dark:bg-black/20 flex justify-center">
                   
-                  {/* Rack Frame 容器，固定高度，對齊精準 */}
+                  {/* Rack Frame 容器，固定高度 */}
                   <div
                     className="relative w-full border-x-[12px] border-t-[12px] border-slate-400 dark:border-slate-600 bg-slate-900 rounded-t-lg shadow-inner mb-4"
                     style={{ height: 42 * U_H }} 
                   >
                     
-                    {/* 左側 U 數刻度列 (Yellow) */}
-                    <div className="absolute left-0 top-0 bottom-0 w-7 sm:w-8 bg-yellow-400/90 flex flex-col-reverse border-r border-slate-800 z-0">
-                      {Array.from({ length: 42 }).map((_, i) => (
-                        <div 
-                          key={i + 1} 
-                          className="w-full flex items-center justify-center text-slate-900 text-[8px] font-bold" 
-                          style={{ height: U_H }}
-                        >
-                          {i + 1}
-                        </div>
-                      ))}
-                    </div>
+                    {/* 左側 U 數刻度列 (Yellow background container) */}
+                    <div className="absolute left-0 top-0 bottom-0 w-7 sm:w-8 bg-yellow-400/90 border-r border-slate-800 z-0" />
 
-                    {/* 右側 空槽格線區 */}
-                    <div className="absolute left-7 sm:left-8 right-0 top-0 bottom-0 flex flex-col-reverse z-0">
-                      {Array.from({ length: 42 }).map((_, i) => {
-                        const u = i + 1;
-                        // 每 5U 加粗上方格線 (flex-col-reverse中，畫在上緣)
-                        const isThick = u % 5 === 0;
-                        return (
+                    {/* 使用絕對定位循環產生刻度與格線，確保數學對齊 */}
+                    {Array.from({ length: 42 }).map((_, i) => {
+                      const u = i + 1;
+                      const bottomPos = i * U_H;
+                      const isThick = u % 5 === 0;
+
+                      return (
+                        <React.Fragment key={`grid-${u}`}>
+                          {/* 左側 U 數文字 (絕對定位，保證上下對齊格子) */}
+                          <div 
+                            className="absolute left-0 w-7 sm:w-8 flex items-center justify-center text-slate-900 text-[8px] font-bold z-0" 
+                            style={{ bottom: bottomPos, height: U_H }}
+                          >
+                            {u}
+                          </div>
+
+                          {/* 右側設備放置空槽 (拖放目標) */}
                           <div
-                            key={u}
-                            className={`w-full group relative box-border border-t ${
-                              isThick ? 'border-slate-500 border-t-[2px]' : 'border-slate-700/60'
-                            }`}
-                            style={{ height: U_H }}
+                            className="absolute left-7 sm:left-8 right-0 z-0 group cursor-pointer"
+                            style={{ bottom: bottomPos, height: U_H }}
                             onDragOver={(e) => allowLayout && e.preventDefault()}
                             onDrop={(e) => onDrop(e, rack.id, u)}
                             onClick={() => onCellClick(rack.id, u)}
                           >
-                            {/* Hover 特效 */}
-                            <div className="absolute inset-0 hover:bg-white/[0.05] transition-colors cursor-pointer" />
+                            <div className="absolute inset-0 hover:bg-white/[0.05] transition-colors" />
                           </div>
-                        );
-                      })}
-                    </div>
 
-                    {/* 設備絕對定位層 (Overlay) - 完全精準對齊格線 */}
+                          {/* 水平格線 (畫在 U 數的上方，確保不干擾高度計算) */}
+                          {u < 42 && (
+                            <div
+                              className={`absolute left-7 sm:left-8 right-0 z-0 ${
+                                isThick ? "bg-slate-500/80 h-[2px]" : "bg-slate-700/50 h-[1px]"
+                              }`}
+                              style={{ bottom: bottomPos + U_H }}
+                            />
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+
+                    {/* 設備絕對定位層 (Overlay) - 完美切齊格線 */}
                     <div className="absolute left-7 sm:left-8 right-0 top-0 bottom-0 pointer-events-none z-10">
                       {listForRack(rack.id).map((d) => {
                         const { bottom, height } = getBlockStyle(d);
@@ -2439,8 +2458,9 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
                               isHovered ? "brightness-125 scale-[1.01] z-20 shadow-[0_0_15px_rgba(56,189,248,0.4)]" : "z-10"
                             }`}
                             style={{
-                              bottom: bottom + 1,  // 往上 1px，避免蓋到網格線
-                              height: height - 1,  // 縮減 1px，完美置於格子內
+                              // 上下內縮 1px 避免蓋到分隔線，確保置中視覺
+                              bottom: bottom + 1,
+                              height: height - 2,
                               backgroundColor: catColor(d.category),
                               backgroundImage: "linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0.2) 100%)",
                               cursor: allowLayout ? "grab" : "pointer",
