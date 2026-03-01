@@ -123,7 +123,7 @@ const LS = {
 } as const;
 
 /* -----------------------------
-  Fixed Colors (自訂固定配色，取消調色盤)
+  Fixed Colors
 ----------------------------- */
 
 const FIXED_COLORS = {
@@ -131,8 +131,8 @@ const FIXED_COLORS = {
   Server: "#60a5fa", // blue
   Storage: "#a78bfa", // purple
   Other: "#f59e0b", // amber
-  rackText: "#0b1220", // light mode readable
-  rackTextDark: "#f8fafc", // dark mode readable
+  rackText: "#0b1220",
+  rackTextDark: "#f8fafc",
 };
 
 /* -----------------------------
@@ -209,6 +209,9 @@ const mockDevices: Device[] = [
     beforeRackId: "BEF_01",
     beforeStartU: 40,
     beforeEndU: 41,
+    afterRackId: "AFT_A1",
+    afterStartU: 40,
+    afterEndU: 41,
     migration: { racked: true, cabled: true, powered: true, tested: true },
   },
   {
@@ -240,6 +243,9 @@ const mockDevices: Device[] = [
     ip: "10.0.1.12",
     serial: "",
     portMap: "",
+    beforeRackId: "BEF_01",
+    beforeStartU: 10,
+    beforeEndU: 10,
     migration: { racked: false, cabled: false, powered: false, tested: false },
   },
 ];
@@ -365,27 +371,27 @@ const ThemeTokens = () => {
   const presets: Record<ThemeStyle, { light: string; dark: string }> = {
     neon: {
       light:
-        ":root{--bg:#f7fafc;--panel:#ffffff;--panel2:#f1f5f9;--text:#0b1220;--muted:#475569;--border:#e2e8f0;--accent:#06b6d4;--accent2:#a855f7;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
+        ":root{--bg:#f8fafc;--panel:#ffffff;--panel2:#f1f5f9;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;--accent:#0ea5e9;--accent2:#8b5cf6;--rack-bg:#1e293b;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
-        "html.dark{--bg:#05070d;--panel:#0b1220;--panel2:#1a2235;--text:#e5e7eb;--muted:#94a3b8;--border:#1e293b;--accent:#22d3ee;--accent2:#c084fc;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
+        "html.dark{--bg:#020617;--panel:#0f172a;--panel2:#1e293b;--text:#f1f5f9;--muted:#94a3b8;--border:#334155;--accent:#38bdf8;--accent2:#a78bfa;--rack-bg:#000000;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
     horizon: {
       light:
-        ":root{--bg:#f6f9ff;--panel:#ffffff;--panel2:#eef3ff;--text:#0a1020;--muted:#5b6478;--border:#e6ebff;--accent:#2563eb;--accent2:#14b8a6;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
+        ":root{--bg:#f6f9ff;--panel:#ffffff;--panel2:#eef3ff;--text:#0a1020;--muted:#5b6478;--border:#e6ebff;--accent:#2563eb;--accent2:#14b8a6;--rack-bg:#1e293b;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
-        "html.dark{--bg:#070a14;--panel:#0b1020;--panel2:#101a33;--text:#f1f5f9;--muted:#9aa4b2;--border:#1a2550;--accent:#60a5fa;--accent2:#2dd4bf;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
+        "html.dark{--bg:#070a14;--panel:#0b1020;--panel2:#101a33;--text:#f1f5f9;--muted:#9aa4b2;--border:#1a2550;--accent:#60a5fa;--accent2:#2dd4bf;--rack-bg:#000000;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
     nebula: {
       light:
-        ":root{--bg:#fbf7ff;--panel:#ffffff;--panel2:#f6edff;--text:#140a20;--muted:#6b5b7a;--border:#f0e1ff;--accent:#7c3aed;--accent2:#ec4899;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
+        ":root{--bg:#fbf7ff;--panel:#ffffff;--panel2:#f6edff;--text:#140a20;--muted:#6b5b7a;--border:#f0e1ff;--accent:#7c3aed;--accent2:#ec4899;--rack-bg:#1e293b;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
-        "html.dark{--bg:#080614;--panel:#0f0b1f;--panel2:#1a1233;--text:#f8fafc;--muted:#a7a1b2;--border:#2a1f4d;--accent:#a78bfa;--accent2:#fb7185;--onColor:#f8fafc;--lampOn:#00ff00;--lampOff:#ff0000}",
+        "html.dark{--bg:#080614;--panel:#0f0b1f;--panel2:#1a1233;--text:#f8fafc;--muted:#a7a1b2;--border:#2a1f4d;--accent:#a78bfa;--accent2:#fb7185;--rack-bg:#000000;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
     matrix: {
       light:
-        ":root{--bg:#f7fbf9;--panel:#ffffff;--panel2:#edf7f2;--text:#07140f;--muted:#5a6b63;--border:#dff2e8;--accent:#10b981;--accent2:#06b6d4;--onColor:#07140f;--lampOn:#00ff00;--lampOff:#ff0000}",
+        ":root{--bg:#f7fbf9;--panel:#ffffff;--panel2:#edf7f2;--text:#07140f;--muted:#5a6b63;--border:#dff2e8;--accent:#10b981;--accent2:#06b6d4;--rack-bg:#1e293b;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
       dark:
-        "html.dark{--bg:#050c09;--panel:#0a1410;--panel2:#0f1f18;--text:#eafff6;--muted:#9bb7ab;--border:#153026;--accent:#34d399;--accent2:#22d3ee;--onColor:#07140f;--lampOn:#00ff00;--lampOff:#ff0000}",
+        "html.dark{--bg:#050c09;--panel:#0a1410;--panel2:#0f1f18;--text:#eafff6;--muted:#9bb7ab;--border:#153026;--accent:#34d399;--accent2:#22d3ee;--rack-bg:#000000;--onColor:#ffffff;--lampOn:#00ff00;--lampOff:#ff0000}",
     },
   };
 
@@ -399,9 +405,6 @@ function useApplyTheme() {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
 }
-
-const rackTextColor = (theme: ThemeMode) =>
-  theme === "dark" ? FIXED_COLORS.rackTextDark : FIXED_COLORS.rackText;
 
 const catColor = (cat: DeviceCategory) => {
   switch (cat) {
@@ -422,12 +425,12 @@ const catColor = (cat: DeviceCategory) => {
 
 const Lamp = ({ on }: { on: boolean }) => (
   <span
-    className="inline-block w-2 h-2 rounded-full"
+    className="inline-block w-1.5 h-1.5 rounded-full"
     style={{
       backgroundColor: on ? "rgb(0,255,0)" : "rgb(255,0,0)",
       boxShadow: on
-        ? "0 0 10px rgba(0,255,0,0.85)"
-        : "0 0 10px rgba(255,0,0,0.75)",
+        ? "0 0 8px rgba(0,255,0,0.9)"
+        : "0 0 8px rgba(255,0,0,0.8)",
     }}
   />
 );
@@ -442,8 +445,7 @@ const LampsRow = ({ m }: { m: MigrationFlags }) => (
 );
 
 /* -----------------------------
-  CSV Export / Import (Full backup/restore)
-  ✅ 移除顏色欄位（顏色固定）
+  CSV Export / Import
 ----------------------------- */
 
 const FULL_HEADERS = [
@@ -2172,7 +2174,6 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
   const setUi = useStore((s) => s.setUi);
   const repairRackIds = useStore((s) => s.repairRackIds);
   const role = useStore((s) => s.role);
-  const theme = useStore((s) => s.theme);
 
   const allowLayout = canManageAssets(role);
 
@@ -2305,195 +2306,168 @@ const RackPlanner = ({ mode }: { mode: PlacementMode }) => {
         {rackRows.map((row, idx) => (
           <div
             key={idx}
-            className="grid gap-3"
+            className="grid gap-4"
             style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}
           >
             {row.map((rack) => (
               <div
                 key={rack.id}
-                className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden"
+                className="relative bg-[#1a1a1a] p-3 rounded-t-xl border-x-[6px] border-t-[6px] border-[#333] shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
               >
-                <div
-                  className="bg-black/30 text-center py-2 border-b border-[var(--border)]"
-                  style={{
-                    fontSize: "15px",
-                    fontWeight: 900,
-                    letterSpacing: "0.04em",
-                    color:
-                      mode === "after" && isNoMoveRack(rack.name)
-                        ? "rgb(255,0,0)"
-                        : "var(--accent)",
-                  }}
-                >
-                  {rack.name}
+                <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-transparent to-black/20 pointer-events-none rounded-t-lg" />
+
+                <div className="relative mb-3 py-1 bg-black/60 rounded border border-white/10 text-center z-10 shadow-inner">
+                  <span
+                    className="font-black tracking-widest uppercase text-sm"
+                    style={{
+                      color: mode === "after" && isNoMoveRack(rack.name) ? "rgb(255,80,80)" : "var(--accent)"
+                    }}
+                  >
+                    {rack.name}
+                  </span>
                 </div>
 
-                <div className="p-2">
-                  <div className="flex gap-2">
-                    <div className="relative">
-                      <div className="relative flex flex-col-reverse">
-                        {Array.from({ length: 42 }).map((_, i) => {
-                          const u = i + 1;
-                          return (
-                            <div
-                              key={u}
-                              className="w-8 pr-1 text-right text-[10px] text-[var(--muted)] flex items-center justify-end"
-                              style={{ height: U_H }}
-                            >
-                              {u}
-                            </div>
-                          );
-                        })}
+                <div
+                  className="relative bg-black/80 rounded-lg border border-white/5 p-1 shadow-inner z-10 mx-auto"
+                  style={{ height: 42 * U_H }}
+                >
+                  {/* 機櫃內側左邊 U 數刻度 */}
+                  <div className="absolute -left-6 inset-y-0 flex flex-col-reverse justify-between py-[2px] opacity-40 w-5">
+                    {Array.from({ length: 42 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="text-[9px] font-mono text-right leading-none flex items-center justify-end"
+                        style={{ height: U_H }}
+                      >
+                        {i + 1}
                       </div>
-                    </div>
+                    ))}
+                  </div>
 
-                    <div
-                      className="relative flex-1 border border-[var(--border)] bg-black/20 rounded-xl overflow-hidden"
-                      style={{ height: 42 * U_H }}
-                    >
-                      <div className="absolute inset-0 flex flex-col-reverse">
-                        {Array.from({ length: 42 }).map((_, i) => {
-                          const u = i + 1;
-                          const thick = u % 5 === 0;
-                          return (
-                            <div
-                              key={u}
-                              onDragOver={(e) => allowLayout && e.preventDefault()}
-                              onDrop={(e) => onDrop(e, rack.id, u)}
-                              onClick={() => onCellClick(rack.id, u)}
-                              className="relative cursor-pointer"
-                              style={{ height: U_H }}
-                              title={
-                                role === "admin"
-                                  ? "點格子：有設備=開詳細；空格=新增並放置"
-                                  : "點格子：有設備=開詳細"
-                              }
-                            >
-                              <div
-                                className="absolute inset-x-0 top-0"
-                                style={{
-                                  height: thick ? 2 : 1,
-                                  background: thick
-                                    ? "rgba(255,255,255,0.35)"
-                                    : "rgba(255,255,255,0.15)",
-                                }}
-                              />
-                              <div className="absolute inset-0 hover:bg-white/[0.04]" />
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {listForRack(rack.id).map((d) => {
-                        const { bottom, height, start, end } = getBlockStyle(d);
-                        const is1U = end - start + 1 === 1;
-
-                        const beforePos =
-                          d.beforeRackId && d.beforeStartU != null && d.beforeEndU != null
-                            ? `${d.beforeRackId.replace(/^BEF_/, "")} ${d.beforeStartU}-${d.beforeEndU}U`
-                            : "-";
-                        const afterPos =
-                          d.afterRackId && d.afterStartU != null && d.afterEndU != null
-                            ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U`
-                            : "-";
-
-                        const txtColor = rackTextColor(theme);
-
+                  <div className="relative w-full h-full">
+                    {/* U 格子 (拖放目標) */}
+                    <div className="absolute inset-0 flex flex-col-reverse">
+                      {Array.from({ length: 42 }).map((_, i) => {
+                        const u = i + 1;
+                        const thick = u % 5 === 0;
                         return (
                           <div
-                            key={d.id}
-                            draggable={allowLayout}
-                            onDragStart={(ev) => {
-                              if (!allowLayout) return;
-                              ev.dataTransfer.setData("text/plain", d.id);
-                              ev.dataTransfer.effectAllowed = "move";
-                            }}
-                            onClick={() => setSelectedDeviceId(d.id)}
-                            onMouseMove={(e) => setHover({ id: d.id, x: e.clientX, y: e.clientY })}
-                            onMouseLeave={() => setHover(null)}
-                            className="absolute left-1 right-1 border border-white/70 select-none transition-transform"
-                            style={{
-                              bottom,
-                              height,
-                              backgroundColor: catColor(d.category),
-                              cursor: allowLayout ? "grab" : "pointer",
-                              borderRadius: 8,
-                              boxShadow:
-                                hover?.id === d.id
-                                  ? "0 0 0 2px rgba(255,255,255,0.35), 0 0 22px rgba(0,0,0,0.28)"
-                                  : "none",
-                              transform: hover?.id === d.id ? "translateY(-1px)" : "translateY(0)",
-                            }}
-                            title="點擊開啟設備詳細"
+                            key={u}
+                            onDragOver={(e) => allowLayout && e.preventDefault()}
+                            onDrop={(e) => onDrop(e, rack.id, u)}
+                            onClick={() => onCellClick(rack.id, u)}
+                            className="relative cursor-pointer"
+                            style={{ height: U_H }}
+                            title={
+                              role === "admin"
+                                ? "點格子：有設備=開詳細；空格=新增並放置"
+                                : "點格子：有設備=開詳細"
+                            }
                           >
-                            <div className="h-full w-full px-2 py-1">
-                              {allowLayout && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    clearPlacement(mode, d.id);
-                                  }}
-                                  className="absolute top-1 right-1 p-1 rounded-lg hover:bg-white/20"
-                                  title="清除位置"
-                                >
-                                  <X size={14} className="text-white" />
-                                </button>
-                              )}
-
-                              <div className="pr-10">
-                                {is1U ? (
-                                  <div
-                                    className="font-black truncate"
-                                    style={{
-                                      color: txtColor,
-                                      fontSize: "clamp(9px, 0.75vw + 4px, 12px)",
-                                      lineHeight: "1.15",
-                                      marginTop: 2,
-                                      whiteSpace: "nowrap",
-                                    }}
-                                  >
-                                    {d.deviceId} | {d.name} | {d.model}
-                                  </div>
-                                ) : (
-                                  <>
-                                    <div
-                                      className="font-black truncate"
-                                      style={{
-                                        color: txtColor,
-                                        fontSize: "clamp(10px, 0.9vw, 13px)",
-                                        lineHeight: "1.15",
-                                      }}
-                                    >
-                                      {d.deviceId} | {d.name}
-                                    </div>
-                                    <div
-                                      className="font-bold truncate"
-                                      style={{
-                                        color: txtColor,
-                                        opacity: 0.95,
-                                        fontSize: "clamp(10px, 0.85vw, 12px)",
-                                        lineHeight: "1.15",
-                                        marginTop: 2,
-                                      }}
-                                    >
-                                      {d.model}
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-
-                              <div className="absolute right-1 bottom-1">
-                                <LampsRow m={d.migration} />
-                              </div>
-                            </div>
-
-                            {hover?.id === d.id && (
-                              <HoverCard x={hover.x} y={hover.y} d={d} beforePos={beforePos} afterPos={afterPos} />
-                            )}
+                            <div
+                              className="absolute inset-x-0 top-0 pointer-events-none"
+                              style={{
+                                height: thick ? 2 : 1,
+                                background: thick
+                                  ? "rgba(255,255,255,0.35)"
+                                  : "rgba(255,255,255,0.15)",
+                              }}
+                            />
+                            <div className="absolute inset-0 hover:bg-white/[0.06]" />
                           </div>
                         );
                       })}
                     </div>
+
+                    {/* 已放置的設備 */}
+                    {listForRack(rack.id).map((d) => {
+                      const { bottom, height } = getBlockStyle(d);
+
+                      const beforePos =
+                        d.beforeRackId && d.beforeStartU != null && d.beforeEndU != null
+                          ? `${d.beforeRackId.replace(/^BEF_/, "")} ${d.beforeStartU}-${d.beforeEndU}U`
+                          : "-";
+                      const afterPos =
+                        d.afterRackId && d.afterStartU != null && d.afterEndU != null
+                          ? `${d.afterRackId.replace(/^AFT_/, "")} ${d.afterStartU}-${d.afterEndU}U`
+                          : "-";
+
+                      const isHovered = hover?.id === d.id;
+
+                      return (
+                        <div
+                          key={d.id}
+                          draggable={allowLayout}
+                          onDragStart={(ev) => {
+                            if (!allowLayout) return;
+                            ev.dataTransfer.setData("text/plain", d.id);
+                            ev.dataTransfer.effectAllowed = "move";
+                          }}
+                          onClick={() => setSelectedDeviceId(d.id)}
+                          onMouseMove={(e) => setHover({ id: d.id, x: e.clientX, y: e.clientY })}
+                          onMouseLeave={() => setHover(null)}
+                          className={`absolute left-1 right-1 border-t border-l border-white/20 rounded-sm shadow-lg transition-all ${
+                            isHovered ? "brightness-125 scale-[1.02] z-20" : "z-10"
+                          }`}
+                          style={{
+                            bottom,
+                            height: height - 1, // 微小的間隙模擬實體感
+                            backgroundColor: catColor(d.category),
+                            backgroundImage:
+                              "linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(0,0,0,0.25) 100%)",
+                            boxShadow: isHovered
+                              ? "0 0 15px rgba(56,189,248,0.5)"
+                              : "inset 0 1px 1px rgba(255,255,255,0.2)",
+                            cursor: allowLayout ? "grab" : "pointer",
+                          }}
+                          title="點擊開啟設備詳細"
+                        >
+                          {/* 模擬伺服器兩側的固定螺絲 */}
+                          <div className="absolute left-1 top-1 w-1 h-1 rounded-full bg-black/50 shadow-inner" />
+                          <div className="absolute left-1 bottom-1 w-1 h-1 rounded-full bg-black/50 shadow-inner" />
+
+                          <div className="h-full w-full px-3 py-0.5 flex items-center justify-between">
+                            {allowLayout && isHovered && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  clearPlacement(mode, d.id);
+                                }}
+                                className="absolute -top-2 -right-2 p-1 rounded-full bg-red-500/90 text-white shadow-lg hover:bg-red-500 z-30"
+                                title="清除位置"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+
+                            <div className="flex flex-col min-w-0 pr-6 overflow-hidden pointer-events-none">
+                              <span
+                                className="font-mono text-[10px] font-bold tracking-tighter truncate"
+                                style={{ color: "var(--onColor)", textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
+                              >
+                                {d.deviceId}
+                              </span>
+                              {height > 25 && (
+                                <span
+                                  className="text-[9px] opacity-90 truncate"
+                                  style={{ color: "var(--onColor)" }}
+                                >
+                                  {d.name}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="absolute right-1 flex items-center bg-black/40 px-1 py-0.5 rounded-full scale-[0.85] shadow-inner">
+                              <LampsRow m={d.migration} />
+                            </div>
+                          </div>
+
+                          {isHovered && (
+                            <HoverCard x={hover.x} y={hover.y} d={d} beforePos={beforePos} afterPos={afterPos} />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
